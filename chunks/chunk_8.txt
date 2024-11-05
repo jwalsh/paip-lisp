@@ -1,0 +1,4362 @@
+Now we have a measure of the three factors: current mobility, potential mobility, and 
+edge stability. All that remains is to find a good way to combine them into a single 
+evaluation metric. The combination function used by Rosenbloom (1982) is a linear 
+combination of the three factors, but each factor's coefficient is dependent on the 
+move number. Rosenbloom's features are normalized to the range [-1000,1000]; we 
+normalize to the range [-1,1] by doing a division after multiplying by the coefficient. 
+That allows us to use fixnuums for the coefficients. Since our three factors are 
+not calculated in quite the same way as Rosenbloom's, it is not surprising that his 
+coefficients are not the best for our program. The edge coefficient was doubled and 
+the potential coefficient cut by a factor of five. 
+
+(defun lago-eval (player board) 
+"Combine edge-stability, current mobility and 
+potential mobility to arrive at an evaluation." 
+
+The three factors are multiplied by coefficients 
+that vary by move number: 
+(let ((c-edg(+ 312000 (* 6240 *move-number*))) 
+
+(c-cur (if (< *move-number* 25) 
+(+ 50000 (* 2000 *move-number*)) 
+(+ 75000 (* 1000 *move-number*)))) 
+
+(c-pot 20000)) 
+
+
+<a id='page-646'></a>
+
+(multiple-value-bind (p-cur p-pot) 
+(mobility player board) 
+(multiple-value-bind (o-cur o-pot) 
+
+(mobility (opponent player) board) 
+;; Combine the three factors into one sum: 
+(+ (round (* c-edg (edge-stability player board)) 32000) 
+
+(round (* c-cur (- p-cur o-cur)) (+ p-cur o-cur 2)) 
+(round (* c-pot (- p-pot o-pot)) (+ p-pot o-pot 2))))))) 
+
+Finally, we are ready to code the lago function. Given a search depth, lago returns a 
+strategy that will do alpha-beta search to that depth using the lago-eval evaluation 
+function. This version of lago was able to defeat the modified weighted-squares 
+strategy in 8 of 10 games at 3 ply, and 9 of 10 at 4 ply. On an Explorer II, 4-ply search 
+takes about 20 seconds per move. At 5 ply, many moves take over a minute, so the 
+program runs the risk of forfeiting. At 3 ply, the program takes only a few seconds 
+per move, but it still was able to defeat the author in five straight games, by scores 
+of 50-14, 64-0, 51-13, 49-15 and 36-28. Despite these successes, it is likely that the 
+evaluation function could be improved greatly with a little tuning of the parameters. 
+
+(defun lago (depth) 
+"Use an approximation of lago's evaluation function." 
+(alpha-beta-searcher3 depth #'iago-eval)) 
+
+18.13 Other Techniques 
+There are many other variations that can be tried to speed up the search and improve 
+play. Unfortunately, choosing among the techniques is a bit of a black art. You will 
+have to experiment to find the combination that is best for each domain and each 
+evaluation function. Most of the following techniques were incorporated, or at least 
+considered and rejected, in Bill. 
+
+Iterative Deepening 
+
+We have seen that the average branching factor for Othello is about 10. This means 
+that searching to depth . -f 1 takes roughly 10 times longer than search to depth 
+
+n. Thus, we should be willing to go to a lot of overhead before we search one level 
+deeper, to assure two things: that search will be done efficiently, and that we won't 
+forfeit due to running out of time. A by-now familiar technique, iterative deepening 
+(see chapters 6 and 14), serves both these goals. 
+
+<a id='page-647'></a>
+Iterative deepening is used as follov/s. The strategy determines how much of the 
+remaining time to allocate to each move. A simple strategy could allocate a constant 
+amount of time for each move, and a more sophisticated strategy could allocate more 
+time for moves at crucial points in the game. Once the time allocation is determined 
+for a move, the strategy starts an iterative deepening alpha-beta search. There are 
+two complications: First, the search at . ply keeps track of the best moves, so that 
+the search at . -h 1 ply will have better ordering information. In many cases it will be 
+faster to do both the . and n + 1 ply searches with the ordering information than to 
+do only the . -i-1 ply search without it. Second, we can monitor how much time has 
+been taken searching each ply, and cut off the search when searching one more ply 
+would exceed the allocated time limit. Thus, iterative-deepening search degrades 
+gracefully as time limits are imposed. It will give a reasonable answer even with a 
+short time allotment, and it will rarely exceed the allotted time. 
+
+Forward Pruning 
+
+One way to cut the number of positions searched is to replace the legal move generator 
+with a plausible move generator: in other words, only consider good moves, and never 
+even look at moves that seem clearly bad. This technique is called forward pruning. 
+It has fallen on disfavor because of the difficulty in determining which moves are 
+plausible. For most games, the factors that would go into a plausible move generator 
+would be duplicated in the static evaluation function anyway, so forward pruning 
+would require more effort without much gain. Worse, forward pruning could rule 
+out a brilliant sacrifice - a move that looks bad initially but eventually leads to a gain. 
+
+For some games, forward pruning is a necessity. The game of Go, for example, is 
+played on a 19 by 19 board, so the first player has 361 legal moves, and a 6-ply search 
+would involve over 2 quadrillion positions. However, many good Go programs can 
+be viewed as not doing forward pruning but doing abstraction. There might be 30 
+empty squares in one portion of the board, and the program would treat a move to 
+any of these squares equivalently. 
+
+Bill uses forward pruning in a limited way to rule out certain moves adjacent to 
+the corners. It does this not to save time but because the evaluation function might 
+lead to such a move being selected, even though it is in fact a poor move. In other 
+words, forward pruning is used to correct a bug in the evaluation function cheaply. 
+
+Nonspeculative Forward Pruning 
+
+This technique makes use of the observation that there are limits in the amount the 
+evaluation function can change from one position to the next. For example, if we 
+are using the count difference as the evaluation function, then the most a move can 
+change the evaluation is +37 (one for placing a piece in the corner, and six captures 
+in each of the three directions). The smallest change is 0 (if the player is forced to 
+
+
+<a id='page-648'></a>
+
+pass). Thus, if there are 2 ply left in the search, and the backed-up value of position 
+A has been established as 38 points better than the static value of position B, then it 
+is useless to expand position B. This assumes that we are evaluating every position, 
+perhaps to do sorted ordering or iterative deepening. It also assumes that no position 
+in the search tree is a final position, because then the evaluation could change by 
+more than 37 points. In conclusion, it seems that nonspeculative forward pruning is 
+not very useful for Othello, although it may play a role in other games. 
+
+Aspiration Search 
+
+Alpha-beta search is initated with the achievable and cutoff boundaries set to 
+. os i ng-val ue and wi nni ng-val ue, respectively. In other words, the search assumes 
+nothing: the final position may be anything from a loss to a win. But suppose we are 
+in a situation somewhere in the mid-game where we are winning by a small margin 
+(say the static evaluation for the current position is 50). In most cases, a single move 
+will not change the evaluation by very much. Therefore, if we invoked the alpha-
+beta search with a window defined by boundaries of, say, 0 and 100, two things can 
+happen: if the actual backed-up evaluation for this position is in fact in the range 0 
+to 100, then the search will find it, and it will be found quickly, because the reduced 
+window will cause more pruning. If the actual value is not in the range, then the 
+value returned will reflect that, and we can search again using a larger window. This 
+is called aspiration search, because we aspire to find a value within a given window. 
+If the window is chosen well, then often we will succeed and will have saved some 
+search time. 
+
+Pearl (1984) suggests an alternative called zero-window search. At each level, the 
+first possible move, which we'll call m, is searched using a reasonably wide window 
+to determine its exact value, which we'll call v. Then the remaining possible moves 
+are searched using . as both the lower and upper bounds of the window. Thus, the 
+result of the search will tell if each subsequent move is better or worse than m, but 
+won't tell how much better or worse. There are three outcomes for zero-window 
+search. If no move turns out to be better than m, then stick with m. If a single move is 
+better, then use it. If several moves are better than m, then they have to be searched 
+again using a wider window to determine which is best. 
+
+There is always a trade-off between time spent searching and information gained. 
+Zero-window search makes an attractive trade-off: we gain some search time by 
+losing information about the value of the best move. We are still guaranteed of 
+finding the best move, we just don't know its exact value. 
+
+Bill's zero-window search takes only 63% of the time taken by full alpha-beta 
+search. It is effective because Bill's move-ordering techniques ensure that the first 
+move is often best. With random move ordering, zero-window search would not be 
+effective. 
+
+
+<a id='page-649'></a>
+Think-Ahead 
+
+A program that makes its move and then waits for the opponent's reply is wasting 
+half the time available to it. A better use of time is to compute, or think-ahead while 
+the opponent is moving. Think-ahead is one factor that helps Bill defeat lago. While 
+many programs have done think-ahead by choosing the most likely move by the 
+opponent and then starting an iterative-deepening search assuming that move. Bill's 
+algorithm is somewhat more complex. It can consider more than one move by the 
+opponent, depending on how much time is available. 
+
+Hashing and Opening Book Moves 
+
+We have been treating the search space as a tree, but in general it is a directed acyclic 
+graph (dag): there may be more than one way to reach a particular position, but there 
+won't be any loops, because every move adds a new piece. This raises the question 
+we explored briefly in section 6.4: should we treat the search space as a tree or a 
+graph? By treating it as a graph we eliminate duplicate evaluations, but we have the 
+overhead of storing all the previous positions, and of checking to see if a new position 
+has been seen before. The decision must be based on the proportion of duplicate 
+positions that are actually encountered in play. One compromise solution is to store 
+in a hash table a partial encoding of each position, encoded as, say, a single fixnum 
+(one word) instead of the seven or so words needed to represent a full board. Along 
+with the encoding of each position, store the move to try first. Then, for each new 
+position, look in the hash table, and if there is a hit, try the corresponding move first. 
+The move may not even be legal, if there is an accidental hash collision, but there is 
+a good chance that the move will be the right one, and the overhead is low. 
+
+One place where it is clearly worthwhile to store information about previous 
+positions is in the opening game. Since there are fewer choices in the opening, it is a 
+good idea to compile an opening "book" of moves and to play by it as long as possible, 
+until the opponent makes a move that departs from the book. Book moves can be 
+gleaned from the literature, although not very much has been written about Othello 
+(as compared to openings in chess). However, there is a danger in following expert 
+advice: the positions that an expert thinks are advantageous may not be the same as 
+the positions from which our program can play well. It may be better to compile the 
+book by playing the program against itself and determining which positions work 
+out best. 
+
+The End Game 
+
+It is also a good idea to try to save up time in the midgame and then make an all-out 
+effort to search the complete game tree to completion as soon as feasible. Bill can 
+search to completion from about 14 ply out. Once the search is done, of course, the 
+
+
+<a id='page-650'></a>
+
+most promising lines of play should be saved so that it won't be necessary to solve 
+the game tree again. 
+
+Metareasontng 
+
+If it weren't for the clock, Othello would be a trivial game: just search the complete 
+game tree all the way to the end, and then choose the best move. The clock imposes 
+a complication: we have to make all our moves before we run out of time. The 
+algorithms we have seen so far manage the clock by allocating a certain amount of 
+time to each move, such that the total time is guaranteed (or at least very likely) to 
+be less than the allotted time. This is a very crude policy. A finer-grained way of 
+managing time is to consider computation itself as a possible move. That is, at every 
+tick of the clock, we need to decide if it is better to stop and play the best move we 
+have computed so far or to continue and try to compute a better move. It will be 
+better to compute more only in the case where we eventually choose a better move; 
+it will be better to stop and play only in the case where we would otherwise forfeit 
+due to time constraints, or be forced to make poor choices later in the game. An 
+algorithm that includes computation as a possible move is called a metareasoning 
+system, because it reasons about how much to reason. 
+
+Russell and Wefald (1989) present an approach based on this view. In addition to 
+an evaluation function, they assume a variance function, which gives an estimate of 
+how much a given position's true value is likely to vary from its static value. At each 
+step, their algorithm compares the value and variance of the best move computed so 
+far and the second best move. If the best move is clearly better than the second best 
+(taking variance into account), then there is no point computing any more. Also, if the 
+top two moves have similar values but both have very low variance, then computing 
+will not help much; we can just choose one of the two at random. 
+
+For example, if the board is in a symmetric position, then there may be two 
+symmetric moves that will have identical value. By searching each move's subtree 
+more carefully, we soon arrive at a low variance for both moves, and then we can 
+choose either one, without searching further. Of course, we could also add special-
+case code to check for symmetry, but the metareasoning approach will work for 
+nonsymmetric cases as well as symmetric ones. If there is a situation where two 
+moves both lead to a clear win, it won't waste time choosing between them. 
+
+The only situation where it makes sense to continue computing is when there 
+are two moves with high variance, so that it is uncertain if the true value of one 
+exceeds the other. The metareasoning algorithm is predicated on devoting time to 
+just this case. 
+
+
+<a id='page-651'></a>
+Learning 
+
+From the earhest days of computer game playing, it was realized that a championship 
+program would need to learn to improve itself. Samuel (1959) describes a program 
+that plays checkers and learns to improve its evaluation function. The evaluation 
+function is a linear combination of features, such as the number of pieces for each 
+player, the number of kings, the number of possible forks, and so on. Learning is 
+done by a hill-climbing search procedure: change one of the coefficients for one of 
+the features at random, and then see if the changed evaluation function is better than 
+the original one. 
+
+Without some guidance, this hill-climbing search would be very slow. First, the 
+space is very large - Samuel used 38 different features, and although he restricted 
+the coefficients to be a power of two between 0 and 20, that still leaves 21^^ possible 
+evaluation functions. Second, the obvious way of determining the relative worth of 
+two evaluation functions - playing a series of games between them and seeing which 
+wins more of ten - is quite time-consuming. 
+
+Fortunately, there is a faster way of evaluating an evaluation function. We can 
+apply the evaluation function to a position and compare this static value with the 
+backed-up value determined by an alpha-beta search. If the evaluation function is 
+accurate, the static value should correlate well with the backed-up value. If it does not 
+correlate well, the evaluation function should be changed in such a way that it does. 
+This approach still requires the trial-and-error of hill-climbing, but it will converge 
+much faster if we can gain information from every position, rather than just from 
+every game. 
+
+In the past few years there has been increased interest in learning by a process 
+of guided search. Neural nets are one example of this. They have been discussed 
+elsewhere. Another example is genetic learning algorithms. These algorithms start 
+with several candidate solutions. In our case, each candidate would consist of a set 
+of coefficients for an evaluation function. On each generation, the genetic algorithm 
+sees how well each candidate does. The worst candidates are eliminated, and the 
+best ones "mate" and "reproduce" - two candidates are combined in some way to 
+yield a new one. If the new offspring has inherited both its parents' good points, then 
+it will prosper; if it has inherited both its parents' bad points, then it will quickly die 
+out. Either way, the idea is that natural selection will eventually yield a high-quality 
+solution. To increase the chances of this, it is a good idea to allow for mutations: 
+random changes in the genetic makeup of one of the candidates. 
+
+18.14 History and References 
+Lee and Mahajan (1986,1990) present the current top Othello program. Bill. Their 
+description outlines all the techniques used but does not go into enough detail to allow 
+
+
+<a id='page-652'></a>
+
+the reader to reconstruct the program. Bill is based in large part on Rosenbloom's 
+lago program. Rosenbloom's article (1982) is more thorough. The presentation in 
+this chapter is based largely on this article, although it also contains some ideas from 
+Bill and from other sources. 
+
+The journal Othello Quarterly is the definitive source for reports on both human 
+and computer Othello games and strategies. 
+
+The most popular game for computer implementation is chess. Shannon (1950a,b) 
+speculated that a computer might play chess. In a way, this was one of the boldest 
+steps in the history of AI. Today, writing a chess program is a challenging but feasible 
+project for an undergraduate. But in 1950, even suggesting that such a program 
+might be possible was a revolutionary step that changed the way people viewed 
+these arithmetic calculating devices. Shannon introduced the ideas of a game tree 
+search, minimaxing, and evaluation functions - ideas that remain intact to this day. 
+Marsland (1990) provides a good short introduction to computer chess, and David 
+Levy has two books on the subject (1976,1988). It was Levy, an international chess 
+master, who in 1968 accepted a bet from John McCarthy, Donald Michie, and others 
+that a computer chess program would not beat him in the next ten years. Levy won 
+the bet. Levy's Heuristic Programming (1990) and Computer Games (1988) cover a variety 
+of computer game playing programs. The studies by DeGroot (1965,1966) give a 
+fascinating insight into the psychology of chess masters. 
+
+Knuth and Moore (1975) analyze the alpha-beta algorithm, and Pearl's book 
+Heuristics (1984) covers all kinds of heuristic search, games included. 
+
+Samuel (1959) is the classic work on learning evaluation function parameters. It 
+is based on the game of checkers. Lee and Mahajan (1990) present an alternative 
+learning mechanism, using Bayesian classification to learn an evaluation function 
+that optimally distinguishes winning positions from losing positions. Genetic algorithms 
+are discussed by L. Davis (1987,1991) and Goldberg (1989). 
+
+18-15 Exercises 
+
+&#9635; Exercise 18.3 [s] How many different Othello positions are there? Would it be 
+feasible to store the complete game tree and thus have a perfect player? 
+
+&#9635; Exercise 18.4 [m] At the beginning of this chapter, we implemented pieces as an 
+enumerated type. There is no built-in facility in Common Lisp for doing this, so 
+we had to introduce a series of defconstant forms. Define a macro for defining 
+enumerated types. What else should be provided besides the constants? 
+
+&#9635; Exercise 18.5 [h] Add fixnum and speed declarations to the lago evaluation func
+
+
+
+<a id='page-653'></a>
+tion and the alpha-beta code. How much does this speed up lago? What other 
+efficiency measures can you take? 
+
+&#9635; Exercise 18.6 [h] Implement an iterative deepening search that allocates time for 
+each move and checks between each iteration if the time is exceeded. 
+
+&#9635; Exercise 18.7 [h] Implement zero-window search, as described in section 18.13. 
+
+&#9635; Exercise 18.8 [d] Read the references on Bill (Lee and Mahajan 1990, and 1986 if 
+you can get it), and reimplement Bill's evaluation function as best you can, using the 
+table-based approach. It will also be helpful to read Rosenbloom 1982. 
+
+&#9635; Exercise 18.9 [d] Improve the evaluation function by tuning the parameters, using 
+one of the techniques described in section 18.13. 
+
+&#9635; Exercise 18.10 [h] Write move-generation and evaluation functions for another 
+game, such as chess or checkers. 
+
+18.16 Answers 
+Answer 18.2 The wei ghted-squa res strategy wins the first game by 20 pieces, 
+but when count-di ff erence plays first, it captures all the pieces on its fifth move. 
+These two games alone are not enough to determine the best strategy; the function 
+othel 1 o-seri es on [page 626](chapter18.md#page-626) shows a better comparison. 
+
+Answer 18.3 3^ = 3,433,683,820,292,512,484,657,849,089,281. No. 
+
+
+<a id='page-654'></a>
+
+Answer 18.4 Besides the constants, we provide a def type for the type itself, and 
+conversion routines between integers and symbols: 
+
+(defmacro define-enumerated-type (type &rest elements) 
+"Represent an enumerated type with integers 0-n. " 
+'(progn 
+
+(deftype .type () '(integer 0 ,( - (length elements) 1))) 
+(defun .(symbol type *->symbol) (.type) 
+(elt '.elements .type)) 
+(defun .(symbol 'symbol-> type) (symbol) 
+(position symbol '.elements)) 
+
+.(loop for element in elements 
+for i from 0 
+collect '(defconstant .element .i)))) 
+
+Here's how the macro would be used to define the piece data type, and the code 
+produced: 
+
+> (macroexpand 
+'(define-enumerated-type piece 
+empty black white outer)) 
+
+(PROGN 
+(DEFTYPE PIECE () '(INTEGER 0 3)) 
+(DEFUN PIECE->SYMBOL (PIECE) 
+
+(ELT '(EMPTY BLACK WHITE OUTER) PIECE)) 
+(DEFUN SYMBOL->PIECE (SYMBOL) 
+
+(POSITION SYMBOL '(EMPTY BLACK WHITE OUTER))) 
+(DEFCONSTANT EMPTY 0) 
+(DEFCONSTANT BLACK 1) 
+(DEFCONSTANT WHITE 2) 
+(DEFCONSTANT OUTER 3)) 
+
+A more general facility would, like defstruct, provide for several options. For 
+example, it might allow for a documentation string for the type and each constant, 
+and for a : cone-name, so the constants could have names like pi ece-empty instead 
+of empty. This would avoid conflicts with other types that wanted to use the same 
+names. The user might also want the ability to start the values at some number other 
+than zero, or to assign specific values to some of the symbols. 
+
+
+## Chapter 19
+<a id='page-655'></a>
+
+Introduction to 
+Natural Language 
+
+Language is everywhere. It permeates our thoughts, 
+mediates our relations with others, and even creeps 
+into our dreams. The overwhelming hulk of human 
+knowledge is stored and transmitted in language. 
+Language is so ubiquitous that we take itfor granted, 
+but without it, society as we know it would 
+be impossible. 
+
+- Ronand Langacker 
+
+Language and its Structure (1967) 
+
+A
+A
+natural language is a language spoken by people, such as English, German, or Tagalog. 
+This is in opposition to artificial languages like Lisp, FORTRAN, or Morse code. 
+Natural language processing is an important part of AI because language is intimately 
+connected to thought. One measure of this is the number of important books that mention 
+language and thought in the title: in AI, Schank and Colby's Computer Models of Thought 
+and Language; in linguistics, Whorf's Language, Thought, and Reality (and Chomsky's Language 
+and Mind;) in philosophy, Fodor's The Language of Thought; and in psychology, Vygotsky's 
+Thought and Language and John Anderson's Language, Memory, and Thought. Indeed, language is 
+
+
+<a id='page-656'></a>
+
+the trait many think of as being the most characteristic of humans. Much controversy 
+has been generated over the question of whether animals, especially primates and 
+dolphins, can use and "understand" language. Similar controversy surrounds the 
+same question asked of computers. 
+
+The study of language has been traditionally separated into two broad classes: 
+syntax, or grammar, and semantics, or meaning. Historically, syntax has achieved 
+the most attention, largely because on the surface it is more amenable to formal and 
+semiformal methods. Although there is evidence that the boundary between the two 
+is at best fuzzy, we still maintain the distinction for the purposes of these notes. We 
+will cover the "easier" part, syntax, first, and then move on to semantics. 
+
+A good artificial language, like Lisp or C, is unambiguous. There is only one 
+interpretation for a valid Lisp expression. Of course, the interpretation may depend 
+on the state of the current state of the Lisp world, such as the value of global variables. 
+But these dependencies can be explicitly enumerated, and once they are spelled out, 
+then there can only be one meaning for the expression,^ 
+
+Natural language does not work like this. Natural expressions are inherently 
+ambiguous, depending on any number of factors that can never be quite spelled out 
+completely. It is perfectly reasonable for two people to disagree on what some other 
+person meant by a natural language expression. (Lawyers and judges make their 
+living largely by interpreting natural language expressions - laws - that are meant to 
+be unambiguous but are not.) 
+
+This chapter is a brief introduction to natural language processing. The next 
+chapter gives a more thorough treatment from the point of view of logic grammars, 
+and the chapter after that puts it all together into a full-fledged system. 
+
+19-1 Parsing with a Phrase-Structure Grammar 
+
+To parse a sentence means to recover the constituent structure of the sentence - to 
+discover what sequence of generation rules could have been applied to come up with 
+the sentence. In general, there may be several possible derivations, in which case 
+we say the sentence is grammatically ambiguous. In certain circles, the term "parse" 
+means to arrive at an understanding of a sentence's meaning, not just its grammatical 
+form. We will attack that more difficult question later. 
+
+^Some erroneous expressions are underspecified and may return different results in different 
+implementations, but we will ignore that problem. 
+
+
+<a id='page-657'></a>
+
+We start with the grammar defined on [page 39](chapter2.md#page-39) for the generate program: 
+
+(defvar ^grammar* "The grammar used by GENERATE.") 
+
+(defparameter *grammarl* 
+
+'((Sentence -> (NP VP)) 
+(NP -> (Art Noun)) 
+(VP -> (Verb NP)) 
+(Art -> the a) 
+(Noun -> man ball woman table) 
+(Verb -> hit took saw liked))) 
+Our parser takes as input a list of words and returns a structure containing the parse 
+tree and the unparsed words, if any. That way, we can parse the remaining words 
+under the next category to get compound rules. For example, in parsing "the man 
+saw the table," we would first parse "the man," returning a structure representing 
+the noun phrase, with the remaining words "saw the table." This remainder would 
+then be parsed as a verb phrase, returning no remainder, and the two phrases could 
+then be joined to form a parse that is a complete sentence with no remainder. 
+
+Before proceeding, I want to make a change in the representation of grammar 
+rules. Currently, rules have a left-hand side and a list of alternative right-hand sides. 
+But each of these alternatives is really a separate rule, so it would be more modular 
+to write them separately. For the generate program it was fine to have them all together, 
+because that made processing choices easier, but now I want a more flexible 
+representation. Later on we will want to add more information to each rule, like the 
+semantics of the assembled left-hand side, and constraints between constituents on 
+the right-hand side, so the rules would become quite large indeed if we didn't split up 
+the alternatives. I also take this opportunity to clear up the confusion between words 
+and category symbols. The convention is that a right-hand side can be either an 
+atom, in which case it is a word, or a list of symbols, which are then all interpreted as 
+categories. To emphasize this, I include "noun" and "verb" as nouns in the grammar 
+*grammar3*, which is otherwise equivalent to the previous *grammarl*. 
+
+(defparameter *grammar3* 
+
+'((Sentence -> (NP VP)) 
+
+(NP -> (Art Noun)) 
+
+(VP -> (Verb NP)) 
+
+(Art -> the) (Art -> a) 
+
+(Noun -> man) (Noun -> ball) (Noun -> woman) (Noun -> table) 
+
+(Noun -> noun) (Noun -> verb) 
+
+(Verb -> hit) (Verb -> took) (Verb -> saw) (Verb -> liked))) 
+
+(setf *grammar* *grammar3*) 
+
+I also define the data types rul e, parse, and tree, and some functions for getting 
+
+
+<a id='page-658'></a>
+
+at the rules. Rules are defined as structures of type list with three slots: the left-
+hand side, the arrow (which should always be represented as the literal ->) and the 
+right-hand side. Compare this to the treatment on [page 40](chapter2.md#page-40). 
+
+(defstruct (rule (:type list)) Ihs -> rhs) 
+
+(defstruct (parse) "A parse tree and a remainder." tree rem) 
+
+;; Trees are of the form: (Ihs . rhs) 
+(defun new-tree (cat rhs) (cons cat rhs)) 
+(defun tree-lhs (tree) (first tree)) 
+(defun tree-rhs (tree) (rest tree)) 
+
+(defun parse-lhs (parse) (tree-lhs (parse-tree parse))) 
+
+(defun lexical-rules (word) 
+"Return a list of rules with word on the right-hand side." 
+(find-all word ^grammar* :key #'rule-rhs :test #'equal)) 
+
+(defun rules-starting-with (cat) 
+"Return a list of rules where cat starts the rhs." 
+(find-all cat *grammar* 
+
+:key #'(lambda (rule) (first-or-nil (rule-rhs rule))))) 
+
+(defun first-or-nil (x) 
+"The first element of . if it is a list; else nil." 
+(if (consp X) (first x) nil)) 
+
+Now we're ready to define the parser. The main function parser takes a list of 
+words to parse. It calls parse, which returns a Ust of all parses that parse some 
+subsequence of the words, starting at the beginning, parser keeps only the parses 
+with no remainder - that is, the parses that span all the words. 
+
+(defun parser (words) 
+"Return all complete parses of a list of words." 
+(mapcar #'parse-tree (complete-parses (parse words)))) 
+
+(defun complete-parses (parses) 
+"Those parses that are complete (have no remainder)." 
+(find-all-if #*null parses :key #*parse-rem)) 
+
+The function parse looks at the first word and considers each category it could be. It 
+makes a parse of the first word under each category, and calls extend - pa rse to try to 
+continue to a complete parse, pa rse uses mapcan to append together all the resulting 
+parses. As an example, suppose we are trying to parse "the man took the ball." pa rse 
+would find the single lexical rule for "the" and call extend-pa rse with a parse with 
+tree (Art t he) and remainder "man took the ball," with no more categories needed. 
+
+
+<a id='page-659'></a>
+extend-parse has two cases. If the partial parse needs no more categories to be 
+complete, then it returns the parse itself, along with any parses that can be formed 
+by extending parses starting with the partial parse. In our example, there is one rule 
+startingwith Art, namely (NP -> (Art Noun)), so the function would try to extend 
+theparse tree (NP (Art the)) with remainder "man took the ball," with the category 
+Noun needed. That call to extend-parse represents the second case. We first parse 
+"man took the ball," and for every parse that is of category Noun (there will be only 
+one), we combine with the partial parse. In this case we get (NP (Art the) (Noun 
+man)). This gets extended as a sentence with a VP needed, and eventually we get a 
+parse of the complete hst of words. 
+
+(defun parse (words) 
+"Bottom-up parse, returning all parses of any prefix of words." 
+(unless (null words) 
+
+(mapcan #'(lambda (rule) 
+(extend-parse (rule-lhs rule) (list (first words)) 
+(rest words) nil)) 
+(lexical-rules (first words))))) 
+
+(defun extend-parse (Ihs rhs rem needed) 
+"Look for the categories needed to complete the parse." 
+(if (null needed) 
+
+If nothing needed, return parse and upward extensions 
+(let ((parse (make-parse :tree (new-tree Ihs rhs) :rem rem))) 
+(cons parse 
+(mapcan 
+#.(lambda (rule) 
+
+(extend-parse (rule-lhs rule) 
+(list (parse-tree parse)) 
+rem (rest (rule-rhs rule)))) 
+
+(rules-starting-with Ihs)))) 
+otherwise try to extend rightward 
+(mapcan 
+#'(lambda (p) 
+(if (eq (parse-lhs p) (first needed)) 
+(extend-parse Ihs (appendl rhs (parse-tree p)) 
+(parse-rem p) (rest needed)))) 
+
+(parse rem)))) 
+
+This makes use of the auxiliary function appendl: 
+(defun appendl (items item) 
+"Add item to end of list of items." 
+(append items (list item))) 
+
+
+<a id='page-660'></a>
+
+Some examples of the parser in action are shown here: 
+
+> (parser '(the table)) 
+((NP (ART THE) (NOUN TABLE))) 
+
+> (parser '(the ball hit the table)) 
+
+((SENTENCE (NP (ART THE) (NOUN BALD) 
+
+(VP (VERB HIT) 
+
+(NP (ARTTHE) (NOUN TABLE))))) 
+
+> (parser '(the noun took the verb)) 
+((SENTENCE (NP (ART THE) (NOUN NOUN)) 
+(VP (VERB TOOK) 
+(NP (ARTTHE) (NOUN VERB))))) 
+
+19.2 Extending the Grammar and 
+Recognizing Ambiguity 
+Overall, the parser seems to work fine, but the range of sentences we can parse is 
+quite limited with the current grammar. The following grammar includes a wider 
+variety of linguistic phenomena: adjectives, prepositional phrases, pronouns, and 
+proper names. It also uses the usual linguistic conventions for category names, 
+summarized in the table below: 
+
+Category Examples 
+Sentence John likes Mary
+
+s 
+
+NP Noun Phrase John; a blue table 
+VP Verb Phrase likes Mary; hit the ball 
+PP Prepositional Phrase to Mary; with the man 
+
+A Adjective little; blue 
+
+A+ A list of one or more adjectives little blue 
+D Determiner the; a 
+. Noun ball; table 
+Name Proper Name John; Mary 
+. Preposition to; with 
+Pro Pronoun you; me 
+V Verb liked; hit 
+
+
+<a id='page-661'></a>
+
+Here is the grammar: 
+
+(defparameter *grammar4* 
+
+'((S -> (NP VP)) 
+(NP -> (D N)) 
+(NP -> (D A+ N)) 
+(NP -> (NP PP)) 
+(NP -> (Pro)) 
+(NP -> (Name)) 
+(VP -> (V NP)) 
+(VP -> (V)) 
+(VP -> (VP PP)) 
+(PP -> (P NP)) 
+(A+ -> (A)) 
+(A+ -> (A A+)) 
+(Pro -> I) (Pro -> you) (Pro -> he) (Pro -> she) 
+(Pro -> it) (Pro -> me) (Pro -> him) (Pro -> her) 
+(Name -> John) (Name -> Mary) 
+(A -> big) (A -> little) (A -> old) (A -> young) 
+(A -> blue) (A -> green) (A -> orange) (A -> perspicuous) 
+(D -> the) (D -> a) (D -> an) 
+(N -> man) (N -> ball) (N -> woman) (N -> table) (N -> orange) 
+(N -> saw) (N -> saws) (N -> noun) (N -> verb) 
+(P -> with) (P -> for) (P -> at) (P -> on) (P -> by) (P -> of) (P -> in) 
+(V -> hit) (V -> took) (V -> saw) (V -> liked) (V -> saws))) 
+(setf ^grammar* *grammar4*) 
+
+Now we can parse more interesting sentences, and we can see a phenomenon that 
+was not present in the previous examples: ambiguous sentences. The sentence "The 
+man hit the table with the ball" has two parses, one where the ball is the thing that 
+hits the table, and the other where the ball is on or near the table, parser finds both 
+of these parses (although of course it assigns no meaning to either parse): 
+
+> (parser '(The man hit the table with the ball)) 
+((S (NP (D THE) (N MAN)) 
+(VP (VP (V HIT) (NP (D THE) (N TABLE))) 
+(PP (P WITH) (NP (DTHE) (N BALL))))) 
+(S (NP (D THE) (N MAN)) 
+(VP (V HIT) 
+(NP (NP (D THE) (N TABLE)) 
+(PP (P WITH) (NP (DTHE) (N BALL))))))) 
+
+Sentences are not the only category that can be ambiguous, and not all ambiguities 
+have to be between parses in the same category. Here we see a phrase that is 
+ambiguous between a sentence and a noun phrase: 
+
+
+<a id='page-662'></a>
+
+> (parser '(the orange saw)) 
+((S (NP (D THE) (N ORANGE)) (VP (V SAW))) 
+(NP (D THE) (A+ (A ORANGE)) (N SAW))) 
+
+19.3 More Efficient Parsing 
+With more complex grammars and longer sentences, the parser starts to slow down. 
+The main problem is that it keeps repeating work. For example, in parsing "The 
+man hit the table with the ball," it has to reparse "with the ball" for both of the 
+resulting parses, even though in both cases it receives the same analysis, a PP. We 
+have seen this problem before and have already produced an answer: memoization 
+(see section 9.6). To see how much memoization will help, we need a benchmark: 
+
+> (setf s (generate 's)) 
+(THE PERSPICUOUS BIG GREEN BALL BY A BLUE WOMAN WITH A BIG MAN 
+HIT A TABLE BY THE SAW BY THE GREEN ORANGE) 
+
+> (time (length (parser s))) 
+Evaluation of (LENGTH (PARSER S)) took 33.11 Seconds of elapsed time. 
+10 
+
+The sentence S has 10 parses, since there are two ways to parse the subject NP and 
+five ways to parse the VP. It took 33 seconds to discover these 10 parses with the 
+pa rse function as it was written. 
+
+We can improve this dramatically by memoizing parse (along with the table-
+lookup functions). Besides memoizing, the only change is to clear the memoization 
+table within parser. 
+
+(memoize 'lexical-rules) 
+(memoize *rules-starting-with) 
+(memoize 'parse -.test #*eq) 
+
+(defun parser (words) 
+"Return all complete parses of a list of words." 
+(clear-memoize 'parse) 
+(mapcar #'parse-tree (complete-parses (parse words)))) 
+
+In normal human language use, memoization would not work very well, since the 
+interpretation of a phrase depends on the context in which the phrase was uttered. 
+But with context-free grammars we have a guarantee that the context cannot affect the 
+interpretation. The call (parse words) must return all possible parses for the words. 
+We are free to choose between the possibilities based on contextual information, but 
+
+
+<a id='page-663'></a>
+
+context can never supply a new interpretation that is not in the context-free list of 
+
+parses. 
+
+The function use is introduced to tell the table-lookup functions that they are out 
+of date whenever the grammar changes: 
+
+(defun use (grammar) 
+
+"Switch to a new grammar." 
+
+(clear-memoize 'rules-starting-with) 
+
+(clear-memoize 'lexical-rules) 
+
+(length (setf *grammar* grammar))) 
+
+Now we run the benchmark again with the memoized version of pa rse: 
+
+> (time (length (parser s))) 
+
+Evaluation of (LENGTH (PARSER S 'S)) took .13 Seconds of elapsed time. 
+
+10 
+
+By memoizing pa rs e we reduce the parse time from 33 to .13 seconds, a 250-fold speedup. 
+We can get a more systematic comparison by looking at a range of examples. 
+For example, consider sentences of the form "The man hit the table [with the ball]*" 
+for zero or more repetitions of the PP "with the ball." In the following table we 
+record N, the number of repetitions of the PP, along with the number of resulting 
+parses^, and for both memoized and unmemoized versions of parse, the number 
+of seconds to produce the parse, the number of parses per second (PPS), and the 
+number of recursive calls to parse. The performance of the memoized version is 
+quite acceptable; for N=5, a 20-word sentence is parsed into 132 possibilities in .68 
+seconds, as opposed to the 20 seconds it takes in the unmemoized version. 
+
+^The number of parses of sentences of this kind is the same as the number of bracketings 
+of a arithmetic expression, or the number of binary trees with a given number of leaves. The 
+resulting sequence (1,2,5,14,42,...) is known as the Catalan Numbers. This kind of ambiguity 
+is discussed by Church and Patil (1982) in their articleCoping with Syntactic Ambiguity, or How 
+to Put the Block in the Box on the Table. 
+
+
+<a id='page-664'></a>
+
+Memoized Unmemoized 
+. Parses Sees PPS CaUs Sees PPS CaUs 
+0 1 0.02 60 4 0.02 60 17 
+1 2 0.02 120 11 0.07 30 96 
+2 5 0.05 100 21 0.23 21 381 
+3 14 0.10 140 34 0.85 16 1388 
+4 42 0.23 180 50 3.17 13 4999 
+5 132 0.68 193 69 20.77 6 18174 
+6 429 1.92 224 91 -
+7 1430 5.80 247 116 -
+8 4862 20.47 238 144 -
+
+&#9635; Exercise 19.1 Pi] It seems that we could be more efficient still by memoizing with 
+a table consisting of a vector whose length is the number of words in the input (plus 
+one). Implement this approach and see if it entails less overhead than the more 
+general hash table approach. 
+
+19.4 The Unknown-Word Problem 
+As it stands, the parser cannot deal with unknown words. Any sentence containing 
+a word that is not in the grammar will be rejected, even if the program can parse all 
+the rest of the words perfectly. One way of treating unknown words is to allow them 
+to be any of the "open-class" categories - nouns, verbs, adjectives, and names, in our 
+grammar. An unknown word will not be considered as one of the "closed-class" 
+categories - prepositions, determiners, or pronouns. This can be programmed very 
+simply by having 1 exi ca 1 - rul es return a list of these open-class rules for every word 
+that is not already known. 
+
+(defparameter *open-categories* '(NVA Name) 
+"Categories to consider for unknown words") 
+
+(defun lexical-rules (word) 
+"Return a list of rules with word on the right-hand side." 
+(or (find-all word *grammar* :key #'rule-rhs :test #'equal) 
+
+(mapcar #'(lambda (cat) '(.cat -> .word)) *open-categories*))) 
+
+With memoization of 1 exi cal - rul es, this means that the lexicon is expanded every 
+time an unknown word is encountered. Let's try this out: 
+
+> (parser '(John liked Mary)) 
+((S (NP (NAME JOHN)) 
+(VP (V LIKED) (NP (NAME MARY))))) 
+
+
+<a id='page-665'></a>
+
+> (parser '(Dana liked Dale)) 
+((S (NP (NAME DANA)) 
+(VP (V LIKED) (NP (NAME DALE))))) 
+
+> (parser '(the rab zaggled the woogly quax)) 
+((S (NP (D THE) (N RAB)) 
+(VP (V ZAGGLED) (NP (D THE) (A+ (A WOOGLY)) (N QUAX))))) 
+
+We see the parser works as well with words it knows (John and Mary) as with new 
+words (Dana and Dale), which it can recognize as names because of their position 
+in the sentence. In the last sentence in the example, it recognizes each unknown 
+word unambiguously. Things are not always so straightforward, unfortunately, as 
+the following examples show: 
+
+> (parser '(the slithy toves gymbled)) 
+
+((S (NP (D THE) (N SLITHY)) (VP (V TOVES) (NP (NAME GYMBLED)))) 
+(S (NP (D THE) (A+ (A SLITHY)) (N TOVES)) (VP (V GYMBLED))) 
+(NP (D THE) (A+ (A SLITHY) (A+ (A TOVES))) (N GYMBLED))) 
+
+> (parser '(the slithy toves gymbled on the wabe)) 
+((S (NP (D THE) (N SLITHY)) 
+(VP (VP (V TOVES) (NP (NAME GYMBLED))) 
+(PP (P ON) (NP (D THE) (N WABE))))) 
+(S (NP (D THE) (N SLITHY)) 
+(VP (V TOVES) (NP (NP (NAME GYMBLED)) 
+(PP (P ON) (NP (D THE) (N WABE)))))) 
+(S (NP (D THE) (A+ (A SLITHY)) (N TOVES)) 
+(VP (VP (V GYMBLED)) (PP (P ON) (NP (D THE) (N WABE))))) 
+(NP (NP (D THE) (A+ (A SLITHY) (A+ (A TOVES))) (N GYMBLED)) 
+(PP (P ON) (NP (D THE) (N WABE))))) 
+
+If the program knew morphology - that a y at the end of a word often signals an 
+adjective, an s a plural noun, and an ed a past-tense verb - then it could do much 
+better. 
+
+19.5 Parsing into a Semantic Representation 
+Syntactic parse trees of a sentence may be interesting, but by themselves they're not 
+very useful. We use sentences to communicate ideas, not to display grammatical 
+structures. To explore the idea of the semantics, or meaning, of a phrase, we need 
+a domain to talk about. Imagine the scenario of a compact disc player capable of 
+playing back selected songs based on their track number. Imagine further that this 
+machine has buttons on the front panel indicating numbers, as well as words such as 
+"play," "to," "and," and "without." If you then punch in the sequence of buttons "play 
+
+
+<a id='page-666'></a>
+
+1 to 5 without 3/' you could reasonably expect the machine to respond by playing 
+tracks 1,2,4, and 5. After a few such successful interactions, you might say that the 
+machine "understands" a limited language. The important point is that the utility of 
+this machine would not be enhanced much if it happened to display a parse tree of 
+the input. On the other hand, you would be justifiably annoyed if it responded to 
+"play 1 to 5 without 3" by playing 3 or skipping 4. 
+
+Now let's stretch the imagination one more time by assuming that this CD player 
+comes equipped with a full Common Lisp compiler, and that we are now in charge 
+of writing the parser for its input language. Let's first consider the relevant data 
+structures. We need to add a component for the semantics to both the rule and tree 
+structures. Once we've done that, it is clear that trees are nothing more than instances 
+of rules, so their definitions should reflect that. Thus, I use an : 1nc1 ude defstruct 
+to define trees, and I specify no copier function, because copy-tree is already a 
+Common Lisp function, and I don't want to redefine it. To maintain consistency 
+with the old new-tree function (and to avoid having to put in all those keywords) I 
+definetheconstructor new-tree. Thisoptiontodefstructmakes (new-tree a b c) 
+equivalent to (make-tree :lhs a :sem b :rhsc). 
+
+(defstruct (rule (itype list)) 
+Ihs -> rhs sem) 
+
+(defstruct (tree (:type list) (:include rule) (rcopiernil) 
+(:constructor new-tree (Ihs sem rhs)))) 
+
+We will adopt the convention that the semantics of a word can be any Lisp object. For 
+example, the semantics of the word "1" could be the object 1, and the semantics of 
+"without" could be the function set-di ff erence. The semantics of a tree is formed 
+by taking the semantics of the rule that generated the tree and applying it (as a 
+function) to the semantics of the constituents of the tree. Thus, the grammar writer 
+must insure that the semantic component of rules are functions that expect the right 
+number of arguments. For example, given the rule 
+
+(NP -> (NP CONJ NP) infix-funcall) 
+
+then the semantics of the phrase "1 to 5 without 3" could be determined by first deter-
+miningthesemanticsof"lto5"tobe(l 2 3 4 5),of"without"tobeset -difference, 
+and of "3" to be (3). After these sub-constituents are determined, the rule is applied 
+by calling the function infix-funcall with the three arguments (1 2 3 4 5), 
+set-difference, and (3). Assuming that infix-funcall is defined to apply its 
+second argument to the other two arguments, the result will be (1 2 4 5). 
+
+This may make more sense if we look at a complete grammar for the CD player 
+problem: 
+
+
+<a id='page-667'></a>
+
+(use 
+
+'((NP -> (NP CONJ NP) infix-funcall) 
+(NP -> (N) list) 
+(NP -> (N . .) infix-funcall) 
+(. -> (DIGIT) identity) 
+(P -> to integers) 
+(CONJ -> and union) 
+(CONJ -> without set-difference) 
+(N -> 1 1) (N -> 2 2) (N -> 3 3) (N -> 4 4) (N -> 5 5) 
+(N -> 6 6) (N -> 7 7) (N -> 8 8) (N -> 9 9) (N -> 0 0))) 
+
+(defun integers (start end) 
+"A list of all the integers in the range [start...end] inclusive." 
+(if (> start end) nil 
+
+(cons start (integers (+ start 1) end)))) 
+
+(defun infix-funcall (argl function arg2) 
+"Apply the function to the two arguments" 
+(funcall function argl arg2)) 
+
+Consider the first three grammar rules, which are the only nonlexical rules. The first 
+says that when two NPs are joined by a conjunction, we assume the translation of 
+the conjunction will be a function, and the translation of the phrase as a whole is 
+derived by calling that function with the translations of the two NPs as arguments. 
+The second rule says that a single noun (whose translation should be a number) 
+translates into the singleton list consisting of that number. The third rule is similar 
+to the first, but concerns joining Ns rather than NPs. The overall intent is that the 
+translation of an NP will always be a list of integers, representing the songs to play. 
+
+As for the lexical rules, the conjunction "and" translates to the union function, 
+"without" translates to the function that subtracts one set from another, and "to" 
+translates to the function that generates a list of integers between two end points. 
+The numbers "0" to "9" translate to themselves. Note that both lexical rules like 
+"CONJ -> and" and nonlexical rules like "NP -> (N . .)" can have functions as 
+their semantic translations; in the first case, the function will just be returned as the 
+semantic translation, whereas in the second case the function will be applied to the 
+list of constituents. 
+
+Only minor changes are needed to par s e to support this kind of semantic processing. 
+As we see in the following, we add a sem argument to extend - pa r se and arrange 
+to pass the semantic components around properly. When we have gathered all the 
+right-hand-side components, we actually do the function application. All changes 
+are marked with We adopt the convention that the semantic value .i 1 indicates 
+failure, and we discard all such parses. 
+
+
+<a id='page-668'></a>
+
+(defun parse (words) 
+"Bottom-up parse, returning all parses of any prefix of words. 
+This version has semantics." 
+(unless (null words) 
+
+(mapcan #'(lambda (rule) 
+(extend-parse (rule-lhs rule) (rule-sem rule) 
+(list (first words)) (rest words) nil)) 
+(lexical-rules (first words))))) 
+
+(defun extend-parse (Ihs sem rhs rem needed) 
+"Look for the categories needed to complete the parse. 
+This version has semantics." 
+(if (null needed) 
+
+If nothing is needed, return this parse and upward extensions, 
+:; unless the semantics fails 
+(let ((parse (make-parse rtree (new-tree Ihs sem rhs) :rem rem))) 
+
+(unless (null (apply-semantics (parse-tree parse))) 
+(cons parse 
+(mapcan 
+#'(lambda (rule) 
+
+(extend-parse (rule-lhs rule) (rule-semrule) 
+(list (parse-tree parse)) rem 
+(rest (rule-rhs rule)))) 
+
+(rules-starting-with Ihs))))) 
+;; otherwise try to extend rightward 
+(mapcan 
+
+#*(lambda (p) 
+(if (eq (parse-lhs p) (first needed)) 
+(extend-parse Ihs sem (appendl rhs (parse-tree p)) 
+(parse-rem p) (rest needed)))) 
+
+(parse rem)))) 
+
+We need to add some new functions to support this: 
+(defun apply-semantics (tree) 
+"For terminal nodes, just fetch the semantics. 
+Otherwise, apply the sem function to its constituents." 
+(if (terminal-tree-p tree) 
+(tree-sem tree) 
+(setf (tree-sem tree) 
+(apply (tree-sem tree) 
+(mapcar #'tree-sem (tree-rhs tree)))))) 
+
+(defun terminal-tree-p (tree) 
+"Does this tree have a single word on the rhs?" 
+(and (length=1 (tree-rhs tree)) 
+
+(atom (first (tree-rhs tree))))) 
+
+
+<a id='page-669'></a>
+
+(defun meanings (words) 
+"Return all possible meanings of a phrase. Throw away the syntactic part." 
+(remove-duplicates (mapcar #'tree-sem (parser words)) :test #'equal)) 
+
+Here are some examples of the meanings that the parser can extract: 
+
+> (meanings '(1 to 5 without 3)) 
+((1 2 4 5)) 
+
+> (meanings '(1 to 4 and 7 to 9)) 
+((123478 9)) 
+
+> (meanings '(1 to 6 without 3 and 4)) 
+((12 4 5 6) 
+(1 2 5 6)) 
+
+The example "(1 to 6 without 3 and 4)" is ambiguous. The first reading corresponds 
+to "((1 to 6) without 3) and 4/' while the second corresponds to "(1 to 6) 
+without (3 and 4)." The syntactic ambiguity leads to a semantic ambiguity - the two 
+meanings have different lists of numbers in them. However, it seems that the second 
+reading is somehow better, in that it doesn't make a lot of sense to talk of adding 4 to 
+a set that already includes it, which is what the first translation does. 
+
+We can upgrade the lexicon to account for this. The following lexicon insists 
+that "and" conjoins disjoint sets and that "without" removes only elements that were 
+already in the first argument. If these conditions do not hold, then the translation 
+will return nil, and the parse will fail. Note that this also means that an empty list, 
+such as "3 to 2," will also fail. 
+
+The previous grammar only allowed for the numbers 0 to 9. We can allow larger 
+numbers by stringing together digits. So now we have two rules for numbers: a 
+number is either a single digit, in which case the value is the digit itself (the i dent i ty 
+function), or it is a number followed by another digit, in which case the value is 10 
+times the number plus the digit. We could alternately have specified a number to be 
+a digit followed by a number, or even a number followed by a number, but either of 
+those formulations would require a more complex semantic interpretation. 
+
+(use 
+
+'((NP -> (NP CONJ NP) infix-funcall) 
+(NP -> (N) list) 
+(NP -> (N . .) infix-funcall) 
+(. -> (DIGIT) identity) 
+(N -> (N DIGIT) 10*N+D) 
+(P -> to integers) 
+(CONJ -> and union*) 
+(CONJ -> without set-diff) 
+(DIGIT -> 1 1) (DIGIT -> 2 2) (DIGIT -> 3 3) 
+
+
+<a id='page-670'></a>
+
+(DIGIT -> 4 4) (DIGIT -> 5 5) (DIGIT -> 6 6) 
+(DIGIT -> 7 7) (DIGIT -> 8 8) (DIGIT -> 9 9) 
+(DIGIT -> 0 0))) 
+
+(defun union* (x y) (if (null (intersection . y)) (append . y))) 
+(defun set-diff (. y) (if (subsetp y .) (set-difference . y))) 
+(defun 10*N-^D (N D) (+ (* 10 N) D)) 
+
+With this new grammar, we can get single interpretations out of most reasonable 
+inputs: 
+
+> (meanings '(1 to 6 without 3 and 4)) 
+((1 2 5 6)) 
+
+> (meanings '(1 and 3 to 7 and 9 without 5 and 6)) 
+((13 4 7 9)) 
+
+> (meanings '(1 and 3 to 7 and 9 without 5 and 2)) 
+((134679 2)) 
+
+> (meanings '(1 9 8 to 2 0 D) 
+((198 199 200 201)) 
+
+> (meanings '(1 2 3)) 
+(123 (123)) 
+
+The example "1 2 3" shows an ambiguity between the number 123 and the list (123), 
+but all the others are unambiguous. 
+
+19.6 Parsing with Preferences 
+One reason we have unambiguous interpretations is that we have a very limited 
+domain of interpretation: we are dealing with sets of numbers, not lists. This is 
+perhaps typical of the requests faced by a CD player, but it does not account for 
+all desired input. For example, if you had a favorite song, you couldn't hear it 
+three times with the request "1 and 1 and 1" under this grammar. We need some 
+compromise between the permissive grammar, which generated all possible parses, 
+and the restrictive grammar, which eliminates too many parses. To get the "best" 
+interpretation out of an arbitrary input, we will not only need a new grammar, we 
+will also need to modify the program to compare the relative worth of candidate 
+interpretations. In other words, we will assign each interpretation a numeric score, 
+and then pick the interpretation with the highest score. 
+
+We start by once again modifying the rule and tree data types to include a score 
+component. As with the sem component, this will be used to hold first a function to 
+compute a score and then eventually the score itself. 
+
+
+<a id='page-671'></a>
+
+(defstruct (rule (:type list) 
+(:constructor 
+rule (Ihs -> rhs &optional sem score))) 
+Ihs -> rhs sem score) 
+
+(defstruct (tree (itype list) (rinclude rule) (:copiernil) 
+(:constructor new-tree (Ihs sem score rhs)))) 
+
+Note that we have added the constructor function rul e. The intent is that the sem 
+and score component of grammar rules should be optional. The user does not have 
+to supply them, but the function use will make sure that the function rul e is called 
+to fill in the missing sem and score values with ni 1. 
+
+(defun use (grammar) 
+"Switch to a new grammar." 
+(clear-memoize 'rules-starting-with) 
+(clear-memoize 'lexical-rules) 
+(length (setf *grammar* 
+
+(mapcar #'(lambda (r) (apply #'rule r)) 
+grammar)))) 
+
+Now we modify the parser to keep track of the score. The changes are again minor, 
+and mirror the changes needed to add semantics. There are two places where we 
+put the score into trees as we create them, and one place where we apply the scoring 
+function to its arguments. 
+
+(defun parse (words) 
+"Bottom-up parse, returning all parses of any prefix of words. 
+This version has semantics and preference scores." 
+(unless (null words) 
+
+(mapcan #'(lambda (rule) 
+
+(extend-parse 
+(rule-lhs rule) (rule-sem rule) 
+(rule-score rule) (list (first words)) 
+(rest words) nil)) 
+
+(lexical-rules (first words))))) 
+
+(defun extend-parse (Ihs sem score rhs rem needed) 
+"Look for the categories needed to complete the parse. 
+This version has semantics and preference scores." 
+(if (null needed) 
+
+If nothing is needed, return this parse and upward extensions, 
+;; unless the semantics fails 
+(let ((parse (make-parse :tree (new-tree Ihs sem score rhs) 
+
+:rem rem))) 
+(unless (null (apply-semantics (parse-tree parse))) 
+
+
+<a id='page-672'></a>
+
+(apply-scorer (parse-tree parse)) 
+(cons parse 
+(mapcan 
+#'(lambda (rule) 
+
+(extend-parse 
+(rule-lhs rule) (rule-sem rule) 
+(rule-score rule) (list (parse-tree parse)) 
+rem (rest (rule-rhs rule)))) 
+
+(rules-starting-with Ihs))))) 
+otherwise try to extend rightward 
+(mapcan 
+#*(lambda (p) 
+(if (eq (parse-lhs p) (first needed)) 
+
+(extend-parse Ihs sem score 
+(appendl rhs (parse-tree p)) 
+(parse-rem p) (rest needed)))) 
+
+(parse rem)))) 
+
+Again we need some new functions to support this. Most important is appl y - scorer, 
+which computes the score for a tree. If the tree is a terminal (a word), then the function 
+just looks up the score associated with that word. In this grammar all words have 
+a score of 0, but in a grammar with ambiguous words it would be a good idea to 
+give lower scores for infrequently used senses of ambiguous words. If the tree is 
+a nonterminal, then the score is computed in two steps. First, all the scores of the 
+constituents of the tree are added up. Then, this is added to a measure for the tree 
+as a whole. The rule associated with each tree will have either a number attached to 
+it, which is added to the sum, or a function. In the latter case, the function is applied 
+to the tree, and the result is added to obtain the final score. Asa final special case, if 
+the function returns nil, then we assume it meant to return zero. This will simplify 
+the definition of some of the scoring functions. 
+
+(defun apply-scorer (tree) 
+"Compute the score for this tree." 
+(let ((score (or (tree-score tree) 0))) 
+
+(setf (tree-score tree) 
+(if (terminal-tree-p tree) 
+score 
+
+Add up the constituent's scores, 
+;; along with the tree's score 
+(+ (sum (tree-rhs tree) #'tree-score-or-0) 
+
+(if (numberp score) 
+score 
+
+(or (apply score (tree-rhs tree)) 0))))))) 
+
+Here is an accessor function to pick out the score from a tree: 
+
+
+<a id='page-673'></a>
+
+(defun tree-score-or-O (tree) 
+
+(if (numberp (tree-score tree)) 
+(tree-score tree) 
+0)) 
+
+Here is the updated grammar. First, I couldn't resist the chance to add more features 
+to the grammar. I added the postnominal adjectives "shuffled," which randomly 
+permutes the list of songs, and "reversed," which reverses the order of play. I also 
+added the operator "repeat," as in "1 to 3 repeat 5," which repeats a list a certain 
+number of times. 1 also added brackets to allow input that says explicitly how it 
+should be parsed. 
+
+(use 
+
+'((NP -> (NP CONJ NP) infix-funcall infix-scorer) 
+(NP -> (N . .) infix-funcall infix-scorer) 
+(NP -> (.) list) 
+(NP ([ NP ]) arg2) 
+(NP (NP ADJ) rev-funcal1 rev-scorer) 
+(NP -> (NP OP N) infix-funcall) 
+(N -> (D) identity) 
+(N (N D) 10*N+D) 
+(P -> to integers prefer<) 
+
+([ -> [ [) 
+(] -> ] ]) 
+(OP -> repeat repeat) 
+(CONJ -> and append prefer-disjoint) 
+(CONJ -> without set-difference prefer-subset) 
+(ADJ -> reversed reverse inv-span) 
+(ADJ -> shuffled permute prefer-not-singleton) 
+(D -> 1 1) (D -> 2 2) (D -> 3 3) (D -> 4 4) (D -> 5 5) 
+(D -> 6 6) (D -> 7 7) (D -> 8 8) (D -> 9 9) (D -> 0 0))) 
+
+The following scoring functions take trees as inputs and compute bonuses or penalties 
+for those trees. The scoring function pref er<, used for the word "to," gives a 
+one-point penalty for reversed ranges: "5 to 1" gets a score of -1, while "1 to 5" gets 
+a score of 0. The scorer for "and," prefer-di s joi nt, gives a one-point penalty for 
+intersecting lists: "1 to 3 and 7 to 9" gets a score of 0, while "1 to 4 and 2 to 5" gets -1. 
+The "x without y" scorer, prefer-subset, gives a three-point penalty when the y list 
+has elements that aren't in the . list. It also awards points in inverse proportion to the 
+length (in words) of the . phrase. The idea is that we should prefer to bind "without" 
+tightly to some small expression on the left. If the final scores come out as positive 
+or as nonintegers, then this scoring component is responsible, since all the other 
+components are negative intgers. The "x shuffled" scorer, prefer-not-singleton, 
+is similar, except that there the penalty is for shuffling a list of less than two songs. 
+
+
+<a id='page-674'></a>
+
+(defun prefer< (x y) 
+(if (>= (sem X) (sem y)) -1)) 
+
+(defun prefer-disjoint (x y) 
+(if (intersection (sem x) (sem y)) -1)) 
+
+(defun prefer-subset (x y) 
+(+ (inv-span x) (if (subsetp (sem y) (sem x)) 0 -3))) 
+
+(defun prefer-not-singleton (x) 
+(+ (inv-span x) (if (< (length (sem x)) 2) -4 0))) 
+
+The inf i x-scorer and rev-scorer functionsdon'taddanythingnew,theyjustassure 
+that the previously mentioned scoring functions will get applied in the right place. 
+
+(defun infix-scorer (argl scorer arg2) 
+(funcall (tree-score scorer) argl arg2)) 
+
+(defun rev-scorer (arg scorer) (funcall (tree-score scorer) arg)) 
+
+Here are the functions mentioned in the grammar, along with some useful utilities: 
+
+(defun arg2 (al a2 &rest a-n) (declare (ignore al a-n)) a2) 
+
+(defun rev-funcall (arg function) (funcall function arg)) 
+
+(defun repeat (list n) 
+"Append list . times." 
+(if (= . 0) 
+
+nil 
+(append list (repeat list (- . 1))))) 
+
+(defun span-length (tree) 
+"How many words are in tree?" 
+(if (terminal-tree-p tree) 1 
+
+(sum (tree-rhs tree) #'span-length))) 
+
+(defun inv-span (tree) (/ 1 (span-length tree))) 
+
+(defun sem (tree) (tree-sem tree)) 
+
+(defun integers (start end) 
+"A list of all the integers in the range [start...end]inclusive. 
+This version allows start > end." 
+(cond ((< start end) (cons start (integers (+ start 1) end))) 
+
+((> start end) (cons start (integers (- start 1) end))) 
+(t (list start)))) 
+
+(defun sum (numbers &optional fn) 
+"Sum the numbers, or sum (mapcar fn numbers)." 
+(if fn 
+
+(loop for X in numbers sum (funcall fn x)) 
+(loop for X in numbers sum x))) 
+
+
+<a id='page-675'></a>
+
+(defun permute (bag) 
+"Return a random permutation of the given input list. " 
+(if (null bag) 
+
+nil 
+(let ((e (random-elt bag))) 
+(cons e (permute (remove e bag rcount 1 :test #*eq)))))) 
+
+We will need a way to show off the preference rankings: 
+
+(defun all-parses (words) 
+(format t "~%Score Semantics^ZBT^a" words) 
+(format t "~% = --251 -~%") 
+(loop for tree in (sort (parser words) #*> :key#'tree-score) 
+
+do (format t "~5,lf ~9a~25T''a~%" (tree-score tree) (tree-sem tree) 
+(bracketing tree))) 
+(values)) 
+
+(defun bracketing (tree) 
+"Extract the terminals, bracketed with parens." 
+(cond ((atom tree) tree) 
+
+((length=1 (tree-rhs tree)) 
+(bracketing (first (tree-rhs tree)))) 
+(t (mapcar #'bracketing (tree-rhs tree))))) 
+
+Now we can try some examples: 
+
+> (all-parses '(1 to 6 without 3 and 4)) 
+Score Semantics (1 TO 6 WITHOUT 3 AND 4) 
+
+0.3 (1 2 5 6) ((1 TO 6) WITHOUT (3 AND 4)) 
+-0.7 (1 2 4 5 6 4) (((1 TO 6) WITHOUT 3) AND 4) 
+> (all -parses '(1 and 3 to 7 and 9 without 5 and 6)) 
+Score Semantics (1 AND 3 TO 7 AND 9 WITHOUT 5 AND 6) 
+
+0.2 (1 3 4 7 9) (1 AND (((3 TO 7) AND 9) WITHOUT (5 AND 6))) 
+0.1 (1 3 4 7 9) (((1 AND (3 TO 7)) AND 9) WITHOUT (5 AND 6)) 
+0.1 (1 3 4 7 9) ((1 AND ((3 TO 7) AND 9)) WITHOUT (5 AND 6)) 
+-0.8 (1 3 4 6 7 9 6) ((1 AND (((3 TO 7) AND 9) WITHOUT 5)) AND 6) 
+-0.8 (1 3 4 6 7 9 6) (1 AND ((((3 TO 7) AND 9) WITHOUT 5) AND 6)) 
+-0.9 (1 3 4 6 7 9 6) ((((1 AND (3 TO 7)) AND 9) WITHOUT 5) AND 6) 
+-0.9 (1 3 4 6 7 9 6) (((1 AND ((3 TO 7) AND 9)) WITHOUT 5) AND 6) 
+-2.0 (1 3 4 5 6 7 9) ((1 AND (3 TO 7)) AND (9 WITHOUT (5 AND 6))) 
+-2.0 (1 3 4 5 6 7 9) (1 AND ((3 TO 7) AND (9 WITHOUT (5 AND 6)))) 
+-3.0 (1 3 4 5 6 7 9 6) (((1 AND (3 TO 7)) AND (9 WITHOUT 5)) AND 6) 
+-3.0 (1 3 4 5 6 7 9 6) ((1 AND (3 TO 7)) AND ((9 WITHOUT 5) AND 6)) 
+-3.0 (1 3 4 5 6 7 9 6) ((1 AND ((3 TO 7) AND (9 WITHOUT 5))) AND 6) 
+
+<a id='page-676'></a>
+
+-3.0 (1 3 4 5 6 7 9 6) (1 AND (((3 TO 7) AND (9 WITHOUT 5)) AND 6)) 
+-3.0 (13 4 5 6 7 9 6) (1 AND ((3 TO 7) AND ((9 WITHOUT 5) AND 6))) 
+
+> (all -parses '(1 and 3 :o 7 and 9 without 5 and 2)) 
+Score Semantics (1 AND 3 TO 7 AND 9 WITHOUT 5 AND 2) 
+
+0.2 (1 3 4 6 7 9 2) ((1 AND (((3 TO 7) AND 9) WITHOUT 5)) AND 2) 
+0.2 (1 3 4 6 7 9 2) (1 AND ((((3 TO 7) AND 9) WITHOUT 5) AND 2)) 
+0.1 (1 3 4 6 7 9 2) ((((1 AND (3 TO 7)) AND 9) WITHOUT 5) AND 2) 
+0.1 (1 3 4 6 7 9 2) (((1 AND ((3 TO 7) AND 9)) WITHOUT 5) AND 2) 
+-2.0 (1 3 4 5 6 7 9 2) (((1 AND (3 TO 7)) AND (9 WITHOUT 5)) AND 2) 
+-2.0 (1 3 4 5 6 7 9 2) ((1 AND (3 TO 7)) AND ((9 WITHOUT 5) AND 2)) 
+-2.0 (1 3 4 5 6 7 9) ((1 AND (3 TO 7)) AND (9 WITHOUT (5 AND 2))) 
+-2.0 (1 3 4 5 6 7 9 2) ((1 AND ((3 TO 7) AND (9 WITHOUT 5))) AND 2) 
+-2.0 (1 3 4 5 6 7 9 2) (1 AND (((3 TO 7) AND (9 WITHOUT 5)) AND 2)) 
+-2.0 (1 3 4 5 6 7 9 2) (1 AND ((3 TO 7) AND ((9 WITHOUT 5) AND 2))) 
+-2.0 (1 3 4 5 6 7 9) (1 AND ((3 TO 7) AND (9 WITHOUT (5 AND 2)))) 
+-2.8 (1 3 4 6 7 9) (1 AND (((3 TO 7) AND 9) WITHOUT (5 AND 2))) 
+-2.9 (1 3 4 6 7 9) (((1 AND (3 TO 7)) AND 9) WITHOUT (5 AND 2)) 
+-2.9 (1 3 4 6 7 9) ((1 AND ((3 TO 7) AND 9)) WITHOUT (5 AND 2)) 
+In each case, the preference rules are able to assign higher scores to more reasonable 
+interpretations. It turns out that, in each case, all the interpretations with positive 
+scores represent the same set of numbers, while interpretations with negative scores 
+seem worse. Seeing all the scores in gory detail may be of academic interest, but what 
+we really want is something to pick out the best interpretation. The following code 
+is appropriate for many situations. It picks the top scorer, if there is a unique one, 
+or queries the user if several interpretations tie for the best score, and it complains 
+if there are no valid parses at all. The query-user function may be useful in many 
+applications, but note that meani ng uses it only as a default; a program that had some 
+automatic way of deciding could supply another ti e-breaker function to meani ng. 
+
+(defun meaning (words &optional (tie-breaker #'query-user)) 
+"Choose the single top-ranking meaning for the words." 
+(let* ((trees (sort (parser words) #*> :key #'tree-score)) 
+
+(best-score (if trees (tree-score (first trees)) 0)) 
+(best-trees (delete best-score trees 
+:key #*tree-score :test-not #'eql)) 
+(best-sems (delete-duplicates (mapcar #'tree-sem best-trees) 
+.-test #'equal))) 
+
+(case (length best-sems) 
+(0 (format t "~&Sorry. I didn't understand that.") nil) 
+(1 (first best-sems)) 
+(t (funcall tie-breaker best-sems))))) 
+
+
+<a id='page-677'></a>
+
+(defun query-user (choices &optiona1 
+(header-str "~&Please pick one:") 
+(footer-str "~&Your choice? ")) 
+
+"Ask user to make a choice." 
+(format *query-io* header-str) 
+(loop for choice in choices for i from 1 do 
+
+(format *query-io* "~&~3d: ~a" i choice)) 
+(format *query-io* footer-str) 
+(nth (- (read) 1) choices)) 
+
+Here we see some final examples: 
+
+> (meaning '(1 to 5 without 3 and 4)) 
+(1 2 5) 
+
+> (meaning '(1 to 5 without 3 and 6)) 
+(12 4 5 6) 
+
+> (meaning '(1 to 5 without 3 and 6 shuffled)) 
+(64125) 
+
+> (meaning '([ 1 to 5 without C 3 and 6 ] ] reversed)) 
+(5 4 2 1) 
+
+> (meaning '(1 to 5 to 9)) 
+
+Sorry. I didn't understand that. 
+NIL 
+
+> (meaning '(1 to 5 without 3 and 7 repeat 2)) 
+Please pick one: 
+
+1: (12 4 5 7 12 4 5 7) 
+2: (12 4 5 7 7) 
+Your choice? 1 
+(12 4 5 7 12 4 5 7) 
+
+> (all-parses '(1 to 5 without 3 and 7 repeat 2)) 
+Score Semantics (1 TO 5 WITHOUT 3 AND 7 REPEAT 2) 
+
+0.3 (12 4 5 7 12 4 5 7) ((((1 TO 5) WITHOUT 3) AND 7) REPEAT 2) 
+0.3 (12 4 5 7 7) (((1 TO 5) WITHOUT 3) AND (7 REPEAT 2)) 
+-2.7 (12 4 5 12 4 5) (((1 TO 5) WITHOUT (3 AND 7)) REPEAT 2) 
+-2.7 (12 4 5) ((1 TO 5) WITHOUT ((3 AND 7) REPEAT 2)) 
+-2.7 (12 4 5) ((1 TO 5) WITHOUT (3 AND (7 REPEAT 2))) 
+This last example points out a potential problem: I wasn't sure what was a good 
+scoring function for "repeat," so I left it blank, it defaulted to 0, and we end up 
+with two parses with the same score. This example suggests that "repeat" should 
+probably involve inv-span like the other modifiers, but perhaps other factors should 
+be involved as well. There can be a complicated interplay between phrases, and it 
+
+
+<a id='page-678'></a>
+
+is not always clear where to assign the score. For example, it doesn't make much 
+sense to repeat a "without" phrase; that is, the bracketing (. without (y repeat 
+.)) is probably a bad one. But the scorer for "without" nearly handles that already. 
+It assigns a penalty if its right argument is not a subset of its left. Unfortunately, 
+repeated elements are not counted in sets, so for example, the list (1 2 3 1 2 3) is a 
+subset of (1 2 3 4). However, we could change the scorer for "without" to test for 
+sub-bag-. (not a built-in Common Lisp function) instead, and then "repeat" would 
+not have to be concerned with that case. 
+
+19.7 The Problem with Context-Free 
+Phrase-Structure Rules 
+The fragment of English grammar we specified in section 19.2 admits a variety of 
+ungrammatical phrases. For example, it is equally happy with both "I liked her" and 
+"me liked she." Only the first of these should be accepted; the second should be 
+ruled out. Similarly, our grammar does not state that verbs have to agree with their 
+subjects in person and number. And, since the grammar has no notion of meaning, 
+it will accept sentences that are semantically anomalous (or at least unusual), such 
+as "the table liked the man." 
+
+There are also some technical problems with context-free grammars. For example, 
+it can be shown that no context-free grammar can be written to account for the 
+language consisting of just the strings ABC, AABBCC, AAABBBCCC, and so forth, 
+where each string has an equal number of As, Bs, and Cs. Yet sentences roughly of 
+that form show up (admittedly rarely) in natural languages. An example is "Robin 
+and Sandy loved and hated Pat and Kim, respectively." While there is still disagreement 
+over whether it is possible to generate natural languages with a context-free 
+grammar, clearly it is much easier to use a more powerful grammatical formalism. 
+For example, consider solving the subject-predicate agreement problem. It is possible 
+to do this with a context-free language including categories like singular-NP, 
+plural-NP, singular-VP, and plural-VP, but it is far easier to augment the grammatical 
+formahsm to allow passing features between constituents. 
+
+It should be noted that context-free phrase-structure rules turned out to be very 
+useful for describing programming languages. Starting with Algol 60, the formalism 
+has been used under the name Bflcfcus-Nflwr Form (BNF) by computer scientists. In this 
+book we are more interested in natural languages, so in the next chapter we will see a 
+more powerful formalism known as unification grammar that can handle the problem 
+of agreement, as well as other difficulties. Furthermore, unification grammars allow a 
+natural way of attaching semantics to a parse. 
+
+
+<a id='page-679'></a>
+
+19.8 History and References 
+There is a class of parsing algorithms known as chart parsers that explicitly cache 
+partial parses and reuse them in constructing larger parses. Barley's algorithm (1970) 
+is the first example, and Martin Kay (1980) gives a good overview of the field and 
+introduces a data structure, the chart, for storing substrings of a parse. Winograd 
+(1983) gives a complex (five-page) specification of a chart parser. None of these 
+authors have noticed that one can achieve the same results by augmenting a simple 
+(one-page) parser with memoization. In fact, it is possible to write a top-down parser 
+that is even more succinct. (See exercise 19.3 below.) 
+
+For a general overview of natural language processing, my preferences (in order) 
+are Allen 1987, Winograd 1983 or Gazdar and Mellish 1989. 
+
+19.9 Exercises 
+&#9635; Exercise 19.2 [m-h] Experiment with the grammar and the parser. Find sentences 
+it cannot parse correctly, and try to add new syntactic rules to account for them. 
+
+&#9635; Exercise 19.3 [m-h] The parser works in a bottom-up fashion. Write a top-down 
+parser, and compare it to the bottom-up version. Can both parsers work with the 
+same grammar? If not, what constraints on the grammar does each parsing strategy 
+impose? 
+
+&#9635; Exercise 19.4 [h] Imagine an interface to a dual cassette deck. Whereas the CD 
+player had one assumed verb, "play," this unit has three explicit verb forms: "record," 
+"play," and "erase." There should also be modifiers "from" and "to," where the object 
+of a "to" is either 1 or 2, indicating which cassette to use, and the object of a "from" 
+is either 1 or 2, or one of the symbols PHONO, CD, or AUX. It's up to you to design 
+the grammar, but you should allow input something like the following, where I have 
+chosen to generate actual Lisp code as the meaning: 
+
+> (meaning '(play 1 to 5 from CD shuffled and 
+record 1 to 5 from CD and 1 and 3 and 7 from 1)) 
+
+(PROGN (PLAY '(15 2 3 4) :FROM 'CD) 
+(RECORD '(12345) :FROM 'CD) 
+(RECORD '(1 3 7) :FROM .)) 
+
+This assumes that the functions play and record take keyword arguments (with 
+defaults) for : from and : to. You could also extend the grammar to accommodate an 
+automatic timer, with phrases like "at 3:00." 
+
+
+<a id='page-680'></a>
+
+&#9635; Exercise 19.5 [m] In the definition of permute, repeated here, why is the :test 
+#'eq needed? 
+
+(defun permute (bag) 
+"Return a random permutation of the given input list. " 
+(if (null bag) 
+
+nil 
+(let ((e (random-elt bag))) 
+(cons e (permute (remove e bag :count 1 :test #'eq)))))) 
+
+&#9635; Exercise 19.6 [m] The definition of permute takes 0{n^). Replace it by an 0 (n) 
+algorithm. 
+
+19.10 Answers 
+Answer 19.1 
+
+(defun parser (words) 
+"Return all complete parses of a list of words." 
+(let* ((table (make-array (+ (length words) 1) :initial-element 0)) 
+
+(parses (parse words (length words) table))) 
+(mapcar #'parse-tree (complete-parses parses)))) 
+
+(defun parse (words num-words table) 
+"Bottom-up parse, returning all parses of any prefix of words." 
+(unless (null words) 
+
+(let ((ans (aref table num-words))) 
+
+(if (not (eq ans 0)) 
+ans 
+(setf (aref table num-words) 
+
+(mapcan #*(lambda (rule) 
+
+(extend-parse (rule-lhs rule) 
+(list (firstwords)) 
+(rest words) nil 
+(- num-words 1) table)) 
+
+(lexical-rules (first words)))))))) 
+
+
+<a id='page-681'></a>
+
+(defun extend-parse (Ihs rhs rem needed num-words table) 
+"Look for the categories needed to complete the parse." 
+(if (null needed) 
+
+If nothing is needed, return this parse and upward extensions 
+(let ((parse (make-parse :tree (new-tree Ihs rhs) :rem rem))) 
+(cons parse 
+(mapcan 
+#*(lambda (rule) 
+
+(extend-parse (rule-lhs rule) 
+(list (parse-tree parse)) 
+rem (rest (rule-rhs rule)) 
+num-words table)) 
+
+(rules-starting-with Ihs)))) 
+otherwise try to extend rightward 
+(mapcan 
+#'(lambda (p) 
+(if (eq (parse-lhs p) (first needed)) 
+
+(extend-parse Ihs (appendl rhs (parse-tree p)) 
+(parse-rem p) (rest needed) 
+(length (parse-rem p)) table))) 
+
+(parse rem num-words table)))) 
+
+It turns out that, for the Lisp system used in the timings above, this version is no 
+faster than normal memoization. 
+
+Answer 19.3 Actually, the top-down parser is a little easier (shorter) than the 
+
+bottom-up version. The problem is that the most straightforward way of imple
+
+
+menting a top-down parser does not handle so-called left recursive rules - rules of the 
+
+form(X -> (X ...)). This includes rules we've used, like (NP -> (NP and NP)). 
+
+The problem is that the parser will postulate an NP, and then postulate that it is of 
+
+the form (NP and NP), and that the first NP of that expression is of the form (NP and 
+
+NP), and so on. An infinite structure of NPs is explored before even the first word is 
+
+considered. 
+
+Bottom-up parsers are stymied by rules with null right-hand sides: (X -> ()) . 
+Note that I was careful to exclude such rules in my grammars earlier. 
+
+(defun parser (words &optional (cat *S)) 
+"Parse a list of words; return only parses with no remainder." 
+(mapcar #*parse-tree (complete-parses (parse words cat)))) 
+
+(defun parse (tokens start-symbol) 
+"Parse a list of tokens, return parse trees and remainders." 
+(if (eq (first tokens) start-symbol) 
+
+(list (make-parse rtree (first tokens) :rem (rest tokens))) 
+(mapcan #*(lambda (rule) 
+(extend-parse (Ihs rule) nil tokens (rhs rule))) 
+(rules-for start-symbol)))) 
+
+
+<a id='page-682'></a>
+
+(defun extend-parse (Ihs rhs rem needed) 
+"Parse the remaining needed symbols." 
+(if (null needed) 
+
+(list (make-parse :tree (cons Ihs rhs) :rem rem)) 
+(mapcan 
+#'(lambda (p) 
+(extend-parse Ihs (append rhs (list (parse-tree p))) 
+(parse-rem p) (rest needed))) 
+(parse rem (first needed))))) 
+
+(defun rules-for (cat) 
+"Return all the rules with category on Ihs" 
+(find-all cat ^grammar* :key #'rule-lhs)) 
+
+Answer 19.5 If it were omitted, then : tes t would default to #'eql, and it would be 
+possible to remove the "wrong" element from the list. Consider the list (1.0 1.0) in 
+an implementation where floating-point numbers are eql but not eq. if random-el t 
+chooses the first 1.0 first, then everything is satisfactory - the result Ust is the same 
+as the input list. However, if random-el t chooses the second 1.0, then the second 
+
+1.0will be the first element of the answer, but remove will remove the wrong 1.0! It 
+will remove the first 1.0, and the final answer will be a list with two pointers to the 
+second 1.0 and none to the first. In other words, we could have: 
+> (member (first x) (permute x) .-test #'eq) 
+NIL 
+
+Answer 19.6 
+
+(defun permute (bag) 
+
+"Return a random permutation of the bag." 
+It is done by converting the bag to a vector, but the 
+result is always the same type as the input bag. 
+
+(let ((bag-copy (replace (make-array (length bag)) bag)) 
+(bag-type (if (listp bag) 'list (type-of bag)))) 
+(coerce (permute-vector! bag-copy) bag-type))) 
+
+(defun permute-vector! (vector) 
+"Destructively permute (shuffle) the vector." 
+(loop for i from (length vector) downto 2 do 
+
+(rotatef (aref vector (-i D) 
+(aref vector (random i)))) 
+vector) 
+
+The answer uses rotatef, a relative of setf that swaps 2 or more values. That is, 
+(rotatef a b) is like: 
+
+
+<a id='page-683'></a>
+(let ((temp a)) 
+(setf a b) 
+(setf b temp) 
+nil) 
+Rarely, rotatef is used with more than two arguments, (rotatef a b c) is like: 
+(let ((temp a)) 
+(setf a b) 
+(setf b c) 
+(setf c temp) 
+nil) 
+
+
+## Chapter 20
+<a id='page-684'></a>
+
+Unification Grammars 
+
+P
+P
+rolog was invented because Alain Colmerauer wanted a formalism to describe the grammar 
+of French. His intuition was that the combination of Horn clauses and unification 
+resulted in a language that was just powerful enough to express the kinds of constraints 
+that show up in natural languages, while not as powerful as, for example, full predicate calculus. 
+This lack of power is important, because it enables efficient implementation of Prolog, and 
+hence of the language-analysis programs built on top of it. 
+
+Of course, Prolog has evolved and is now used for many applications besides natural language, 
+but Colmerauer's underlying intuition remains a good one. This chapter shows how 
+to view a grammar as a set of logic programming clauses. The clauses define what is a legal 
+sentence and what isn't, without any explicit reference to the process of parsing or generation. 
+The amazing thing is that the clauses can be defined in a way that leads to a very efficient 
+parser. Furthermore, the same grammar can be used for both parsing and generation (at least 
+in some cases). 
+
+
+<a id='page-685'></a>
+20. 1 Parsing as Deduction 
+Here's how we could express the grammar rule "A sentence can be composed of a 
+noun phrase followed by a verb phrase" in Prolog: 
+
+(<- (S ?s) 
+(NP ?np) 
+(VP ?vp) 
+(concat ?np ?vp ?s)) 
+
+The variables represent strings of words. As usual, they will be implemented as lists 
+of symbols. The rule says that a given string of words ? s is a sentence if there is a string 
+that is noun phrase and one that is a verb phrase, and if they can be concatenated to 
+form ?s. Logically, this is fine, and it would work as a program to generate random 
+sentences. However, it is a very inefficient program for parsing sentences. It will 
+consider all possible noun phrases and verb phrases, without regard to the input 
+words. Only when it gets to the concat goal (defined on [page 411](chapter12.md#page-411)) will it test to see if 
+the two constituents can be concatenated together to make up the input string. Thus, 
+a better order of evaluation for parsing is: 
+
+(<- (S ?s) 
+(concat ?np ?vp ?s) 
+(NP ?np) 
+(VP ?vp)) 
+
+The first version had NP and VP guessing strings to be verified by concat. In most 
+grammars, there will be a very large or infinite number of NPs and VPs. This second 
+version has concat guessing strings to be verified by NP and VP. If there are . words 
+in the sentence, then concat can only make . -h 1 guesses, quite an improvement. 
+However, it would be better still if we could in effect have concat and .. work together 
+to make a more constrained guess, which would then be verified by VP. 
+
+We have seen this type of problem before. In Lisp, the answer is to return multiple 
+values. NP would be a function that takes a string as input and returns two values: 
+an indication of success or failure, and a remainder string of words that have not yet 
+been parsed. When the first value indicates success, then VP would be called with 
+the remaining string as input. In Prolog, return values are just extra arguments. So 
+each predicate will have two parameters: an input string and a remainder string. 
+Following the usual Prolog convention, the output parameter comes after the input. 
+In this approach, no calls to concat are necessary, no wild guesses are made, and 
+Prolog's backtracking takes care of the necessary guessing: 
+
+
+<a id='page-686'></a>
+
+(<- (S ?sO ?s2) 
+(NP ?sO ?sl) 
+(VP ?sl ?s2)) 
+
+This rule can be read as "The string from s0 to s2 is a sentence if there is an si such 
+that the string from sq to si is a noun phrase and the string from 5i to S2 is a verb 
+phrase." 
+
+A sample query would be (? - (S (The boy ate the apple) ())). With 
+suitable definitions of . . and VP, this would succeed, with the following bindings 
+holding within S: 
+
+?sO = (The boy ate the apple) 
+
+?sl = (ate the apple) 
+
+?s2 = () 
+
+Another way of reading the goal (NP ?sO ?sl), for example, is as "IS the Hst ?sO 
+minus the Ust ?sl a noun phrase?" In this case, ?sO minus ?sl is the Ust (The boy). 
+The combination of two arguments, an input list and an output list, is often called a 
+difference list, to emphasize this interpretation. More generally, the combination of an 
+input parameter and output parameter is caUed an accumulator. Accumulators, particularly 
+difference lists, are an important technique throughout logic programming 
+and are also used in functional programming, as we saw on [page 63](chapter3.md#page-63). 
+
+In our rule for S, the concatenation of difference lists was implicit. If we prefer, 
+we could define a version of concat for difference lists and call it explicitly: 
+
+(<- (S ?s-in ?s-rem) 
+(NP ?np-in ?np-rem) 
+(VP ?vp-in ?vp-rem) 
+
+(concat ?np-in ?np-rem ?vp-in ?vp-rem ?s-in ?s-rem)) 
+
+(<- (concat ?a ?b ?b ?c ?a ?c)) 
+
+Because this version of concat has a different arity than the old version, they can 
+safely coexist. It states the difference list equation {a -b) -\- {b -c) = {a - c). 
+
+In the last chapter we stated that context-free phrase-structure grammar is inconvenient 
+for expressing things like agreement between the subject and predicate of a 
+sentence. With the Horn-clause-based grammar formalism we are developing here, 
+we can add an argument to the predicates NP and VP to represent agreement. In 
+English, the agreement rule does not have a big impact. For all verbs except be, the 
+difference only shows up in the third-person singular of the present tense: 
+
+
+<a id='page-687'></a>
+Singular Plural 
+
+first person I sleep we sleep 
+
+second person you sleep you sleep 
+
+third person he/she sleeps they sleep 
+
+Thus, the agreement argument will take on one of the two values 3sg or ~3sg to 
+indicate third-person-singular or not-third-person-singular. We could write: 
+
+(<- (S ?sO ?s2) 
+(NP ?agr ?sO ?sl) 
+(VP ?agr ?sl ?s2)) 
+
+(<- (NP 3sg (he . ?s) ?s)) 
+(<- (NP ~3sg (they . ?s) ?$)) 
+
+(<- (VP 3sg (sleeps . ?s) ?s)) 
+(<- (VP ~3sg (sleep . Is) Is)) 
+
+This grammar parses just the right sentences: 
+
+> (?- (S (He sleeps) ())) 
+Yes. 
+
+> (?- (S (He sleep) ())) 
+No. 
+
+Let's extend the grammar to allow common nouns as well as pronouns: 
+
+(<- (NP ?agr ?sO ?s2) 
+(Det ?agr ?sO ?sl) 
+(N ?agr ?sl ?s2)) 
+
+(<- (Det ?any (the . ?s) ?s)) 
+(<- (N 3sg (boy . Is) Is)) 
+(<- (N 3sg (girl . ?s) ?s)) 
+
+The same grammar rules can be used to generate sentences as well as parse. Here 
+are all possible sentences in this trivial grammar: 
+
+> (?- (S ?words ())) 
+7W0RDS = (HE SLEEPS); 
+7W0RDS = (THEY SLEEP); 
+?WORDS = (THE BOY SLEEPS); 
+7W0RDS = (THE GIRL SLEEPS); 
+No. 
+
+So far all we have is a recognizer: a predicate that can separate sentences from 
+
+
+<a id='page-688'></a>
+
+nonsentences. But we can add another argument to each predicate to build up the 
+semantics. The result is not just a recognizer but a true parser: 
+
+(<- (S (?pred ?subj) ?sO ?s2) 
+
+(NP ?agr ?subj ?sO ?sl) 
+
+(VP ?agr ?pred ?sl ?s2)) 
+
+(<- (NP 3sg (the male) (he . ?s) ?s)) 
+(<- (NP ~3sg (some objects) (they . ?s) ?s)) 
+
+(<- (NP ?agr (?det ?n) ?sO ?s2) 
+
+(Det ?agr ?det ?sO ?sl) 
+
+(N ?agr ?n ?sl ?s2)) 
+
+(<- (VP 3sg sleep (sleeps . ?s) ?s)) 
+(<- (VP ~3sg sleep (sleep . ?s) ?s)) 
+
+(<- (Det ?any the (the . ?s) ?s)) 
+(<- (N 3sg (young male human) (boy . ?s) ?s)) 
+(<- (N 3sg (young female human) (girl . ?s) ?s)) 
+
+The semantic translations of individual words is a bit capricious. In fact, it is not too 
+important at this point if the translation of boy is (young mal e human) or just boy. 
+There are two properties of a semantic representation that are important. First, it 
+should be unambiguous. The representation of orange the fruit should be different 
+from orange the color (although the representation of the fruit might well refer to 
+the color, or vice versa). Second, it should express generalities, or allow them to 
+be expressed elsewhere. So either sleep and sleeps should have the same or similar 
+representation, or there should be an inference rule relating them. Similarly, if the 
+representation of boy does not say so explicitly, there should be some other rule 
+saying that a boy is a male and a human. 
+
+Once the semantics of individual words is decided, the semantics of higher-level 
+categories (sentences and noun phrases) is easy. In this grammar, the semantics of 
+a sentence is the application of the predicate (the verb phrase) to the subject (the 
+noun phrase). The semantics of a compound noun phrase is the application of the 
+determiner to the noun. 
+
+This grammar returns the semantic interpretation but does not build a syntactic 
+tree. The syntactic structure is implicit in the sequence of goals: S calls NP and VP, 
+and . . can call Det and N. If we want to make this explicit, we can provide yet another 
+argument to each nonterminal: 
+
+(<- (S (?pred ?subj) (s ?np ?vp)?sO ?s2) 
+(NP ?agr ?subj ?np ?sO ?sl) 
+(VP ?agr ?pred ?vp ?sl ?s2)) 
+
+(<- (NP 3sg (the male) (np he) (he . Is) ?s)) 
+(<- (NP ~3sg (some objects) (np they) (they . ?s) ?s)) 
+
+
+<a id='page-689'></a>
+(<- (NP ?agr (?det ?n) (np ?det-syn ?n-syn) ?sO ?s2) 
+(Det ?agr ?det ?det-syn ?sO ?sl) 
+(N ?agr ?n ?n-syn ?sl ?s2)) 
+
+(<- (VP 3sg sleep (vp sleeps) (sleeps . ?s) ?s)) 
+(<- (VP ""Ssg sleep (vp sleep) (sleep . ?s) ?s)) 
+
+(<- (Det ?any the (det the) (the . ?s) ?s)) 
+(<- (N 3sg (young male human) (n boy) (boy . ?s) ?s)) 
+(<- (N 3sg (young female human) (n girl) (girl . ?s) ?s)) 
+
+This grammar can still be used to parse or generate sentences, or even to enumerate 
+all syntax/semantics/sentence triplets: 
+
+Parsing: 
+> (?- (S ?sem ?syn (He sleeps) ())) 
+?SEM = (SLEEP (THE MALE)) 
+?SYN = (S (NP HE) (VP SLEEPS)). 
+
+Generating: 
+> (?- (S (sleep (the male)) ? ?words ())) 
+7W0RDS = (HE SLEEPS) 
+
+Enumerating: 
+> (?- (S ?sem ?syn ?words ())) 
+?SEM = (SLEEP (THE MALE)) 
+?SYN = (S (NP HE) (VP SLEEPS)) 
+?WORDS = (HE SLEEPS); 
+
+?SEM = (SLEEP (SOME OBJECTS)) 
+
+?SYN = (S (NP THEY) (VP SLEEP)) 
+
+7W0RDS = (THEY SLEEP); 
+
+?SEM = (SLEEP (THE (YOUNG MALE HUMAN))) 
+?SYN = (S (NP (DET THE) (N BOY)) (VP SLEEPS)) 
+7W0RDS = (THE BOY SLEEPS); 
+
+?SEM = (SLEEP (THE (YOUNG FEMALE HUMAN))) 
+?SYN = (S (NP (DET THE) (N GIRD) (VP SLEEPS)) 
+7W0RDS = (THE GIRL SLEEPS); 
+
+No. 
+
+20.2 Definite Clause Grammars 
+We now have a powerful and efficient tool for parsing sentences. However, it is 
+getting to be a very messy tool - there are too many arguments to each goal, and it 
+
+
+<a id='page-690'></a>
+
+is hard to tell which arguments represent syntax, which represent semantics, which 
+represent in/out strings, and which represent other features, like agreement. So, 
+we will take the usual step when our bare programming language becomes messy: 
+define a new language. 
+
+Edinburgh Prolog recognizes assertions called definite clause grammar (DCG) rules. 
+The term definite clause is just another name for a Prolog clause, so DCGs are also 
+called "logic grammars." They could have been called "Horn clause grammars" or 
+"Prologgrammars" as well. 
+
+DCG rules are clauses whose main functor is an arrow, usually written - ->. They 
+compile into regular Prolog clauses with extra arguments. In normal DCG rules, only 
+the string arguments are automatically added. But we will see later how this can be 
+extended to add other arguments automatically as well. 
+
+We will implement DCG rules with the macro rule and an infix arrow. Thus, we 
+want the expression: 
+
+(rule (S) --> (NP) (VP)) 
+
+to expand into the clause: 
+
+(<- (S ?sO ?s2) 
+
+(NP ?sO ?sl) 
+
+(VP ?sl ?s2)) 
+
+While we're at it, we may as well give rul e the ability to deal with different types of 
+rules, each one represented by a different type of arrow. Here's the rul e macro: 
+
+(defmacro rule (head &optional (arrow *:-) &body body) 
+"Expand one of several types of logic rules into pure Prolog." 
+This is data-driven, dispatching on the arrow 
+(funcall (get arrow 'rule-function) head body)) 
+
+As an example of a rule function, the arrow: - will be used to represent normal Prolog 
+clauses. That is, the form (rul e head : -body) will be equivalent to (<-head body). 
+
+(setf (get *:- 'rule-function) 
+#'(lambda (head body) .(<- .head .,body))) 
+
+Before writing the rule function for DCG rules, there are two further features of the 
+DCG formalism to consider. First, some goals in the body of a rule may be normal 
+Prolog goals, and thus do not require the extra pair of arguments. In Edinburgh 
+Prolog, such goals are surrounded in braces. One would write: 
+
+
+<a id='page-691'></a>
+s(Sem) --> np(Subj), vp(Pred). 
+{combi ne(Subj,Pred. Sem)}. 
+
+where the idea is that combi ne is riot a grammatical constituent, but rather a Prolog 
+predicate that could do some calculations on Subj and Pred to arrive at the proper 
+semantics, Sem. We will mark such a test predicate not by brackets but by a list 
+headed by the keyword : test, as in: 
+
+(rule (S ?sem) --> (NP ?subj) (VP ?pred) 
+(:test (combine ?subj ?pred ?sem))) 
+
+Second, we need some way of introducing individual words on the right-hand side, 
+as opposed to categories of words. In Prolog, brackets are used to represent a word 
+or Ust of words on the right-hand side: 
+
+verb --> [sleeps]. 
+
+We will use a list headed by the keyword : word: 
+
+(rule (NP (the male) 3sg) --> (:word he)) 
+(rule (VP sleeps 3sg) --> (:word sleeps)) 
+
+The following predicates test for these two special cases. Note that the cut is also 
+allowed as a normal goal. 
+
+(defun dcg-normal-goal-p (x) (or (starts-with . :test) (eq . '!))) 
+(defun dcg-word-list-p (x) (starts-with . 'iword)) 
+
+At last we are in a position to present the rule function for DCG rules. The function 
+make-deg inserts variables to keep track of the strings that are being parsed. 
+
+(setf (get '--> 'rule-function) 'make-dcg) 
+
+(defun make-dcg (head body) 
+(let ((n (count-if (complement #'dcg-normal-goal-p) body))) 
+.(<- (,@head ?sO .(symbol *?s n)) 
+.,(make-dcg-body body 0)))) 
+
+
+<a id='page-692'></a>
+
+(defun make-dcg-body (body n) 
+"Make the body of a Definite Clause Grammar (DCG) clause. 
+Add ?string-in and -out variables to each constituent. 
+Goals like (:test goal) are ordinary Prolog goals, 
+and goals like (:word hello) are literal words to be parsed." 
+(if (null body) 
+
+nil 
+(let ((goal (first body))) 
+
+(cond 
+((eq goal '!) (cons . (make-dcg-body (rest body) n))) 
+((dcg-normal-goal-p goal) 
+
+(append (rest goal) 
+(make-dcg-body (rest body) n))) 
+((dcg-word-list-p goal) 
+(cons 
+'(= .(symbol 'Is n) 
+(.(rest goal) ..(symbol '?s (+ . 1)))) 
+(make-dcg-body (rest body) (+ . 1)))) 
+(t (cons 
+(append goal 
+(list (symbol '?s n) 
+(symbol '?s (+ . 1)))) 
+(make-dcg-body (rest body) (+ . 1)))))))) 
+
+&#9635; Exercise 20.1 [m] make - dcg violates one of the cardinal rules of macros. What does 
+it do wrong? How would you fix it? 
+
+20.3 A Simple Grammar in DCG Format 
+Here is the trivial grammar from [page 688](chapter20.md#page-688) in DCG format. 
+
+(rule (S (?pred ?subj)) --> 
+(NP ?agr ?subj) 
+(VP ?agr ?pred)) 
+
+(rule (NP ?agr (?det ?n)) --> 
+(Det ?agr ?det) 
+(N ?agr ?n)) 
+
+
+<a id='page-693'></a>
+
+(rule (NP 3sg (the male)) --> (:word he)) 
+
+(rule (NP ~3sg (some objects)) --> (:word they)) 
+
+(rule (VP 3sg sleep) --> (:word sleeps)) 
+
+(rule (VP ~3sg sleep) --> (:word sleep)) 
+
+(rule (Det ?any the) --> (:word the)) 
+
+(rule (N 3sg (young male human)) --> (:word boy)) 
+
+(rule (N 3sg (young female human)) --> (:word girl)) 
+
+This grammar is quite limited, generating only four sentences. The first way we will 
+extend it is to allow verbs with objects: in addition to "The boy sleeps," we will allow 
+"The boy meets the girl." To avoid generating ungrammatical sentences like "* The 
+boy meets,"^ we will separate the category of verb into two subcategories: transitive 
+verbs, which take an object, and intransitive verbs, which don't. 
+
+Transitive verbs complicate the semantic interpretation of sentences. We would 
+liketheinterpretationof "Terry kisses Jean" tobe (kiss Terry Jean). The interpretation 
+of the noun phrase "Terry" is just Te r ry, but then what should the interpretation 
+of the verb phrase "kisses Jean" be? To fit our predicate application model, it must 
+be something equivalent to (lambda (x) (kiss . Jean)). When applied to the 
+subject, we want to get the simplification: 
+
+((lambda (x) (kiss . Jean)) Terry) => (kiss Terry Jean) 
+
+Such simplification is not done automatically by Prolog, but we can write a predicate 
+to do it. We will call it funcall, because it is similar to the Lisp function of that name, 
+although it only handles replacement of the argument, not full evaluation of the 
+body. (Technically, this is the lambda-calculus operation known as beta-reduction.) 
+The predicate funcall is normally used with two input arguments, a function and its 
+argument, and one output argument, the resulting reduction: 
+
+(<- (funcall (lambda (?x) ?body) ?x ?body)) 
+
+With this we could write our rule for sentences as: 
+
+(rule (S ?sem) --> 
+(NP ?agr ?subj) 
+(VP ?agr ?pred) 
+(:test (funcall ?pred ?subj ?sem))) 
+
+An alternative is to, in effect, compile away the call to funcall. Instead of having the 
+semantic representation of VP be a single lambda expression, we can represent it as 
+
+^The asterisk at the start of a sentence is the standard linguistic notation for an utterance 
+that is ungrammatical or otherwise ill-formed. 
+
+
+<a id='page-694'></a>
+
+two arguments: an input argument, ?subj, which acts as a parameter to the output 
+argument, ?pred, which takes the place of the body of the lambda expression. By 
+explicitly manipulating the parameter and body, we can eliminate the call to funcall. 
+The trick is to make the parameter and the subject one and the same: 
+
+(rule (S ?pred) --> 
+(NP ?agr ?subj) 
+(VP ?agr ?subj ?pred)) 
+
+One way of reading this rule is "To parse a sentence, parse a noun phrase followed 
+bya verb phrase. If they have different agreement features then fail, but otherwise 
+insert the interpretation of the noun phrase, ?subj, into the proper spot in the 
+interpretation of the verb phrase, ?pred, and return ?pred as the final interpretation 
+of the sentence." 
+
+The next step is to write rules for verb phrases and verbs. Transitive verbs are 
+Usted under the predicate Verb/tr, and intransitive verbs are Usted as Verb/intr. 
+The semantics of tenses (past and present) has been ignored. 
+
+(rule (VP ?agr ?subj ?pred) --> 
+(Verb/tr ?agr ?subj ?pred ?obj) 
+(NP ?any-agr ?obj)) 
+
+(rule (VP ?agr ?subj ?pred) --> 
+(Verb/intr ?agr ?subj ?pred)) 
+
+(rule (Verb/tr ~3sg ?x (kiss ?x ?y) ?y) --> (iword kiss)) 
+(rule (Verb/tr 3sg ?x (kiss ?x ?y) ?y) --> (:word kisses)) 
+(rule (Verb/tr ?any ?x (kiss ?x ?y) ?y) --> (:word kissed)) 
+
+(rule (Verb/intr ~3sg ?x (sleep ?x)) --> (iword sleep)) 
+(rule (Verb/intr 3sg ?x (sleep ?x)) --> (iword sleeps)) 
+(rule (Verb/intr ?any ?x (sleep ?x)) --> (:word slept)) 
+
+Here are the rules for noun phrases and nouns: 
+
+(rule (NP ?agr ?sem) --> 
+(Name ?agr ?sem)) 
+
+(rule (NP ?agr (?det-sem ?noun-sem)) --> 
+(Det ?agr ?det-sem) 
+(Noun ?agr ?noun-sem)) 
+
+(rule (Name 3sg Terry) --> (iword Terry)) 
+(rule (Name 3sg Jean) --> (iword Jean)) 
+
+
+<a id='page-695'></a>
+(rule (Noun 3sg (young male human)) --> (:word boy)) 
+(rule (Noun 3sg (young female human)) --> (rword girl)) 
+(rule (Noun ~3sg (group (young male human))) --> (:word boys)) 
+(rule (Noun ~3sg (group (young female human))) --> (:word girls)) 
+
+(rule (Det ?any the) --> (:word the)) 
+(rule (Det 3sg a) --> (rword a)) 
+
+This grammar and lexicon generates more sentences, although it is still rather limited. 
+Here are some examples: 
+
+> (?- (S ?sem (The boys kiss a girl) ())) 
+?SEM = (KISS (THE (GROUP (YOUNG MALE HUMAN))) 
+(A (YOUNG FEMALE HUMAN))). 
+
+> (?- (S ?sem (The girls kissed the girls) ())) 
+?SEM = (KISS (THE (GROUP (YOUNG FEMALE HUMAN))) 
+(THE (GROUP (YOUNG FEMALE HUMAN)))). 
+
+> (?- (S ?sem (Terry kissed the girl) ())) 
+?SEM = (KISS TERRY (THE (YOUNG FEMALE HUMAN))). 
+
+> (?- (S ?sem (The girls kisses the boys) ())) 
+No. 
+
+> (?- (S ?sem (Terry kissed a girls) ())) 
+No. 
+
+> (?- (S ?sem (Terry sleeps Jean) ())) 
+No. 
+
+The first three examples are parsed correctly, while the final three are correctly 
+rejected. The inquisitive reader may wonder just what is going on in the interpretation 
+of a sentence like "The girls kissed the girls." Do the subject and object represent the 
+same group of girls, or different groups? Does everyone kiss everyone, or are there 
+fewer kissings going on? Until we define our representation more carefully, there is no 
+way to tell. Indeed, it seems that there is a potential problem in the representation, in 
+that the predicate ki ss sometimes has individuals as its arguments, and sometimes 
+groups. More careful representations of "The girls kissed the girls" include the 
+following candidates, using predicate calculus: 
+
+VxVy xegirls . yegirls => kiss(x,y) 
+VxVy xegirls . yegirls . x^^y => kiss(x,y) 
+Vx3y,z xegirls . yegirls . zegirls => kiss(x,y) . kiss(z,x) 
+Vx3y xegirls . yegirls => kiss(x,y) V kiss(y,x) 
+
+The first of these says that every girl kisses every other girl. The second says the same 
+thing, except that a girl need not kiss herself. The third says that every girl kisses 
+
+
+<a id='page-696'></a>
+
+and is kissed by at least one other girl, but not necessarily all of them, and the fourth 
+says that everbody is in on at least one kissing. None of these interpretations says 
+anything about who "the girls" are. 
+
+Clearly, the predicate calculus representations are less ambiguous than the representation 
+produced by the current system. On the other hand, it would be wrong 
+to choose one of the representations arbitrarily, since in different contexts, "The girls 
+kissed the girls" can mean different things. Maintaining ambiguity in a concise form 
+is useful, as long as there is some way eventually to recover the proper meaning. 
+
+20.4 A DCG Grammar with Quantifiers 
+The problem in the representation we have been using becomes more acute when we 
+consider other determiners, such as "every." Consider the sentence "Every picture 
+paints a story." The preceding DCG, if given the right vocabulary, would produce 
+the interpretation: 
+
+(paints (every picture) (a story)) 
+
+This can be considered ambiguous between the following two meanings, in predicate 
+calculus form: 
+
+VX picture(x) 3 y story(y) . paint(x,y) 
+3 y story(y) . V . picture(x) => paint(x,y) 
+
+The first says that for each picture, there is a story that it paints. The second says that 
+there is a certain special story that every picture paints. The second is an unusual 
+interpretation for this sentence, but for "Every U.S. citizen has a president," the 
+second interpretation is perhaps the preferred one. In the next section, we will see 
+how to produce representations that can be transformed into either interpretation. 
+For now, it is a useful exercise to see how we could produce just the first representation 
+above, the interpretation that is usually correct. First, we need to transcribe it into 
+Lisp: 
+
+(all ?x (-> (picture ?x) (exists ?y (and (story ?y) (paint ?x ?y))))) 
+
+The first question is how the a 11 and exi sts forms get in there. They must come from 
+the determiners, "every" and "a." Also, it seems that a 11 is followed by an implication 
+arrow, ->, while exi sts is followed by a conjunction, and. So the determiners will 
+have translations looking like this: 
+
+
+<a id='page-697'></a>
+(rule (Det ?any ?x ?p ?q (the ?x (and ?p ?q))) --> (:word the)) 
+(rule (Det 3sg ?x ?p ?q (exists ?x (and ?p ?q))) --> (:word a)) 
+(rule (Det 3sg ?x ?p ?q (all ?x (-> ?p ?q))) --> (:word every)) 
+
+Once we have accepted these translations of the determiners, everything else follows. 
+The formulas representing the determiners have two holes in them, ?p and ?q. The 
+first will be filled by a predicate representing the noun, and the latter will be filled 
+by the predicate that is being applied to the noun phrase as a whole. Notice that a 
+curious thing is happening. Previously, translation to logical form was guided by 
+the sentence's verb. Linguisticly, the verb expresses the main predicate, so it makes 
+sense that the verb's logical translation should be the main part of the sentence's 
+translation. In linguistic terms, we say that the verb is the head of the sentence. 
+
+With the new translations for determiners, we are in effect turning the whole 
+process upside down. Now the subject's determiner carries the weight of the whole 
+sentence. The determiner's interpretation is a function of two arguments; it is applied 
+to the noun first, yielding a function of one argument, which is in turn applied to the 
+verb phrase's interpretation. This primacy of the determiner goes against intuition, 
+but it leads directly to the right interpretation. 
+
+The variables ?p and ?q can be considered holes to be filled in the final interpretation, 
+but the variable ?x fills a quite different role. At the end of the parse, ?x will 
+not be filled by anything; it will still be a variable. But it will be referred to by the 
+expressions filling ?p and ?q. We say that ?x is a metavariable, because it is a variable 
+in the representation, not a variable in the Prolog implementation. It just happens 
+that Prolog variables can be used to implement these metavariables. 
+
+Here are the interpretations for each word in our target sentence and for each 
+intermediate constituent: 
+
+Every = (all ?x (-> ?pl ?ql)) 
+picture = (picture ?x) 
+paints = (paint ?x ?y) 
+a = (exists ?y (and ?p2 ?q2)) 
+story = (story ?y) 
+
+Every picture = (all ?x (-> (picture ?x) ?ql)) 
+a story = (exists ?y (and (story ?y) ?q2)) 
+paints a story = (exists ?y (and (story ?y) (paint ?x ?y))) 
+
+The semantics of a noun has to fill the ?p hole of a determiner, possibly using the 
+metavariable ?x. The three arguments to the Noun predicate are the agreement, the 
+metavariable ?x, and the assertion that the noun phrase makes about ?x: 
+
+
+<a id='page-698'></a>
+
+(rule (Noun 3sg ?x (picture ?x)) --> (:word picture)) 
+(rule (Noun 3sg ?x (story ?x)) --> (:word story)) 
+(rule (Noun 3sg ?x (and (young ?x) (male ?x) (human ?x))) --> 
+
+(iword boy)) 
+
+The NP predicate is changed to take four arguments. First is the agreement, then 
+the metavariable ?x. Third is a predicate that will be supplied externally, by the verb 
+phrase. The final argument returns the interpretation of the NP as a whole. As we 
+have stated, this comes from the determiner: 
+
+(rule (NP ?agr ?x ?pred ?pred) --> 
+(Name ?agr ?name)) 
+
+(rule (NP ?agr ?x ?pred ?np) --> 
+(Det ?agr ?x ?noun ?pred ?np) 
+(Noun ?agr ?x ?noun)) 
+
+The rule for an NP with determiner is commented out because it is convenient to 
+introduce an extended rule to replace it at this point. The new rule accounts for 
+certain relative clauses, such as "the boy that paints a picture": 
+
+(rule (NP ?agr ?x ?pred ?np) --> 
+(Det ?agr ?x ?noun&rel ?pred ?np) 
+(Noun ?agr ?x ?noun) 
+(rel-clause ?agr ?x ?noun ?noun&rel)) 
+
+(rule (rel-clause ?agr ?x ?np ?np) --> ) 
+
+(rule (rel-clause ?agr ?x ?np (and ?np ?rel)) --> 
+(iword that) 
+(VP ?agr ?x ?rel)) 
+
+The new rule does not account for relative clauses where the object is missing, such 
+as "the picture that the boy paints." Nevertheless, the addition of relative clauses 
+means we can now generate an infinite language, since we can always introduce a 
+relative clause, which introduces a new noun phrase, which in turn can introduce 
+yet another relative clause. 
+
+The rules for relative clauses are not complicated, but they can be difficult to 
+understand. Of the four arguments to rel -clause, the first two hold the agreement 
+features of the head noun and the metavariable representing the head noun. 
+The last two arguments are used together as an accumulator for predications about 
+the metavariable: the third argument holds the predications made so far, and the 
+fourth will hold the predications including the relative clause. So, the first rule for 
+rel -cl ause says that if there is no relative clause, then what goes in to the accumulator 
+is the same as what goes out. The second rule says that what goes out is the 
+conjunction of what comes in and what is predicated in the relative clause itself. 
+
+
+<a id='page-699'></a>
+Verbs apply to either one or two metavariables, just as they did before. So we can 
+use the definitions of Verb/tr and Verb/i ntr unchanged. For variety, I've added a 
+few more verbs: 
+
+(rule (Verb/tr ~3sg ?x ?y (paint ?x ?y)) --> (rword paint)) 
+(rule (Verb/tr 3sg ?x ?y (paint ?x ?y)) --> (iword paints)) 
+(rule (Verb/tr ?any ?x ?y (paint ?x ?y)) --> (.-word painted)) 
+
+(rule (Verb/intr ''3sg ?x (sleep ?x)) --> (:word sleep)) 
+(rule (Verb/intr 3sg ?x (sleep ?x)) --> (:word sleeps)) 
+(rule (Verb/intr ?any ?x (sleep ?x)) --> (:word slept)) 
+
+(rule (Verb/intr 3sg ?x (sells ?x)) --> (:word sells)) 
+
+(rule (Verb/intr 3sg ?x (stinks ?x)) --> (:word stinks)) 
+
+Verb phrases and sentences are almost as before. The only difference is in the call to 
+NP, which now has extra arguments: 
+
+(rule (VP ?agr ?x ?vp) --> 
+(Verb/tr ?agr ?x ?obj ?verb) 
+(NP ?any-agr ?obj ?verb ?vp)) 
+
+(rule (VP ?agr ?x ?vp) --> 
+(Verb/intr ?agr ?x ?vp)) 
+
+(rule (S ?np) --> 
+(NP ?agr ?x ?vp ?np) 
+(VP ?agr ?x ?vp)) 
+
+With this grammar, we get the following correspondence between sentences and 
+logical forms: 
+
+Every picture paints a story. 
+(ALL ?3 (-> (PICTURE ?3) 
+(EXISTS ?14 (AND (STORY ?14) (PAINT ?3 ?14))))) 
+
+Every boy that paints a picture sleeps. 
+(ALL ?3 (-> (AND (AND (YOUNG ?3) (MALE ?3) (HUMAN ?3)) 
+(EXISTS ?19 (AND (PICTURE ?19) 
+(PAINT ?3 ?19)))) 
+(SLEEP ?3))) 
+
+Every boy that sleeps paints a picture. 
+(ALL ?3 (-> (AND (AND (YOUNG ?3) (MALE ?3) (HUMAN ?3)) 
+(SLEEP ?3)) 
+(EXISTS ?22 (AND (PICTURE ?22) (PAINT ?3 ?22))))) 
+
+
+<a id='page-700'></a>
+
+Every boy that paints a picture that sells 
+paints a picture that stinks. 
+(ALL ?3 (-> (AND (AND (YOUNG ?3) (MALE ?3) (HUMAN ?3)) 
+
+(EXISTS ?19 (AND (AND (PICTURE ?19) (SELLS ?19)) 
+(PAINT ?3 ?19)))) 
+(EXISTS ?39 (AND (AND (PICTURE ?39) (STINKS ?39)) 
+(PAINT ?3 ?39))))) 
+
+20.5 Preserving Quantifier Scope Ambiguity 
+Consider the simple sentence "Every man loves a woman." This sentence is ambiguous 
+between the following two interpretations: 
+
+Vm3w man(m) . woman(w) . loves(m,w) 
+3wVm man(m) . woman(w) . Ioves(m,w) 
+
+The first interpretation is that every man loves some woman - his wife, perhaps. 
+The second interpretation is that there is a certain woman whom every man loves - 
+Natassja Kinski, perhaps. The meaning of the sentence is ambiguous, but the structure 
+is not; there is only one syntactic parse. 
+
+In the last section, we presented a parser that would construct one of the two 
+interpretations. In this section, we show how to construct a single interpretation 
+that preserves the ambiguity, but can be disambiguated by a postsyntactic process. 
+The basic idea is to construct an intermediate logical form that leaves the scope of 
+quantifiers unspecified. This intermediate form can then be rearranged to recover 
+the final interpretation. 
+
+To recap, here is the interpretation we would get for "Every man loves a woman," 
+given the grammar in the previous section: 
+
+(all ?m (-> (man ?m) (exists ?w) (and (woman ?w) (loves ?m ?w)))) 
+
+We will change the grammar to produce instead the intermediate form: 
+
+(and (all ?m (man ?m)) 
+(exists ?w (wowan ?w)) 
+(loves ?m ?w)) 
+
+The difference is that logical components are produced in smaller chunks, with 
+unscoped quantifiers. The typical grammar rule will build up an interpretation by 
+conjoining constituents with and, rather than by fitting pieces into holes in other 
+
+
+<a id='page-701'></a>
+pieces. Here is the complete grammar and a just-large-enough lexicon in the new 
+format: 
+
+(rule (S (and ?np ?vp)) --> 
+(NP ?agr ?x ?np) 
+(VP ?agr ?x ?vp)) 
+
+(rule (VP ?agr ?x (and ?verb ?obj)) --> 
+(Verb/tr ?agr ?x ?o ?verb) 
+(NP ?any-agr ?o ?obj)) 
+
+(rule (VP ?agr ?x ?verb) --> 
+(Verb/intr ?agr ?x ?verb)) 
+
+(rule (NP ?agr ?name t) --> 
+(Name ?agr ?name)) 
+
+(rule (NP ?agr ?x ?det) --> 
+(Det ?agr ?x (and ?noun ?rel) ?det) 
+(Noun ?agr ?x ?noun) 
+(rel-clause ?agr ?x ?rel)) 
+
+(rule (rel-clause ?agr ?x t) --> ) 
+
+(rule (rel-clause ?agr ?x ?rel) --> 
+(:word that) 
+(VP ?agr ?x ?rel)) 
+
+(rule (Name 3sg Terry) --> (:word Terry)) 
+(rule (Name 3sg Jean) --> (:word Jean)) 
+(rule (Det 3sg ?x ?restr (all ?x ?restr)) --> (:word every)) 
+(rule (Noun 3sg ?x (man ?x)) --> (:word man)) 
+(rule (Verb/tr 3sg ?x ?y (love ?x ?y)) --> (iword loves)) 
+(rule (Verb/intr 3sg ?x (lives ?x)) --> (iword lives)) 
+(rule (Det 3sg ?x ?res (exists ?x ?res)) --> (iword a)) 
+(rule (Noun 3sg ?x (woman ?x)) --> (iword woman)) 
+
+This gives us the following parse for "Every man loves a woman": 
+
+(and (all ?4 (and (man ?4) t)) 
+(and (love ?4 ?12) (exists ?12 (and (woman ?12) t)))) 
+
+If we simplified this, eliminating the ts and joining ands, we would get the desired 
+representation: 
+
+(and (all ?m (man ?m)) 
+(exists ?w (wowan ?w)) 
+(loves ?m ?w)) 
+
+From there, we could use what we know about syntax, in addition to what we know 
+
+
+<a id='page-702'></a>
+
+about men, woman, and loving, to determine the most likely final interpretation. 
+This will be covered in the next chapter. 
+
+20.6 Long-Distance Dependencies 
+So far, every syntactic phenomena we have considered has been expressible in a 
+rule that imposes constraints only at a single level. For example, we had to impose 
+the constraint that a subject agree with its verb, but this constraint involved two 
+immediate constituents of a sentence, the noun phrase and verb phrase. We didn't 
+need to express a constraint between, say, the subject and a modifier of the verb's 
+object. However, there are linguistic phenomena that require just these kinds of 
+constraints. 
+
+Our rule for relative clauses was a very simple one: a relative clause consists of the 
+word "that" followed by a sentence that is missing its subject, as in "every man that 
+loves a woman." Not all relative clauses follow this pattern. It is also possible to form 
+a relative clause by omitting the object of the embedded sentence: "every man that a 
+woman loves In this sentence, the symbol u indicates a gap, which is understood 
+as being filled by the head of the complete noun phrase, the man. This has been 
+called a filler-gap dependency. It is also known as a long-distance dependency, because 
+the gap can occur arbitrarily far from the filler. For example, all of the following are 
+valid noun phrases: 
+
+The person that Lee likes u 
+
+The person that Kim thinks Lee likes ' 
+
+The person that Jan says Kim thinks Lee likes u 
+
+In each case, the gap is filled by the head noun, the person. But any number of relative 
+clauses can intervene between the head noun and the gap. 
+
+The same kind of filler-gap dependency takes place in questions that begin with 
+"who," "what," "where," and other interrogative pronouns. For example, we can ask 
+a question about the subject of a sentence, as in "Who likes Lee?", or about the object, 
+as in "Who does Kim like '?" 
+
+Here is a grammar that covers relative clauses with gapped subjects or objects. 
+The rules for S, VP, and .. are augmented with a pair of arguments representing 
+an accumulator for gaps. Like a difference list, the first argument minus the second 
+represents the presence or absence of a gap. For example, in the first two rules for 
+noun phrases, the two arguments are the same, ?gO and ?gO. This means that the rule 
+as a whole has no gap, since there can be no difference between the two arguments. 
+In the third rule for NP, the first argument is of the form (gap ...), and the second 
+is nogap. This means that the right-hand side of the rule, an empty constituent, can 
+be parsed as a gap. (Note that if we had been using true difference lists, the two 
+
+
+<a id='page-703'></a>
+
+arguments would be ((gap ...) ?gO) and ?gO. But since we are only dealing with 
+one gap per rule, we don't need true difference lists.) 
+
+The rule for S says that a noun phrase with gap ?gO minus ?gl followed by a verb 
+phrase with gap ?gl minus ?g2 comprise a sentence with gap ?gO minus ?g2. The 
+rule for relative clauses finds a sentence with a gap anywhere; either in the subject 
+position or embedded somewhere in the verb phrase. Here's the complete grammar: 
+
+(rule (S ?gO ?g2 (and ?np ?vp)) --> 
+(NP ?gO ?gl ?agr ?x ?np) 
+(VP ?gl ?g2 ?agr ?x ?vp)) 
+
+(rule (VP ?gO ?gl ?agr ?x (and ?obj ?verb)) --> 
+(Verb/tr ?agr ?x ?o ?verb) 
+(NP ?gO ?gl ?any-agr ?o ?obj)) 
+
+(rule (VP ?gO ?gO ?agr ?x ?verb) --> 
+(Verb/intr ?agr ?x ?verb)) 
+
+(rule (NP ?gO ?gO ?agr ?name t) --> 
+(Name ?agr ?name)) 
+
+(rule (NP ?gO ?gO ?agr ?x ?det) --> 
+(Det ?agr ?x (and ?noun ?rel) ?det) 
+(Noun ?agr ?x ?noun) 
+(rel-clause ?agr ?x ?rel)) 
+
+(rule (NP (gap NP ?agr ?x) nogap ?agr ?x t) --> ) 
+
+(rule (rel-clause ?agr ?x t) --> ) 
+
+(rule (rel-clause ?agr ?x ?rel) --> 
+(:word that) 
+
+(S (gap NP ?agr ?x) nogap ?rel)) 
+
+Here are some sentence/parse pairs covered by this grammar: 
+Every man that ' loves a woman likes a person. 
+(AND (ALL ?28 (AND (MAN ?28) 
+(AND . (AND (LOVE ?28 ?30) 
+(EXISTS ?30 (AND (WOMAN ?30) 
+T)))))) 
+(AND (EXISTS ?39 (AND (PERSON ?39) T)) (LIKE ?28 ?39))) 
+
+Every man that a woman loves yUkes a person. 
+(AND (ALL ?37 (AND (MAN ?37) 
+(AND (EXISTS ?20 (AND (WOMAN ?20) T)) 
+(AND . (LOVE ?20 137))))) 
+(AND (EXISTS ?39 (AND (PERSON ?39) T)) (LIKE ?37 ?39))) 
+
+
+<a id='page-704'></a>
+
+Every man that loves a bird that u^Hes likes a person. 
+(AND (ALL ?28 (AND (MAN ?28) 
+(AND . (AND (EXISTS ?54 
+(AND (BIRD ?54) 
+(AND . (FLY ?54)))) 
+(LOVE ?28 ?54))))) 
+(AND (EXISTS ?60 (AND (PERSON ?60) T)) (LIKE ?28 ?60))) 
+
+Actually, there are limitations on the situations in which gaps can appear. In particular, 
+it is rare to have a gap in the subject of a sentence, except in the case of a relative 
+clause. In the next chapter, we will see how to impose additional constraints on gaps. 
+
+20.7 Augmenting DCG Rules 
+In the previous section, we saw how to build up a semantic representation of a 
+sentence by conjoining the semantics of the components. One problem with this 
+approach is that the semantic interpretation is often something of the form (and 
+(and t a) when we would prefer (and ab). There are two ways to correct 
+this problem: either we add a step that takes the final semantic interpretation and 
+simplifies it, or we complicate each individual rule, making it generate the simplified 
+form. The second choice would be slightly more efficient, but would be very ugly 
+and error prone. We should be doing all we can to make the rules simpler, not more 
+complicated; that is the whole point of the DCG formalism. This suggests a third 
+approach: change the rule interpreter so that it automatically generates the semantic 
+interpretation as a conjunction of the constituents, unless the rule explicitly says 
+otherwise. This section shows how to augment the DCG rules to handle common 
+cases like this automatically. 
+
+Consider again a rule from section 20.4: 
+
+(rule (S (and ?np ?vp))--> 
+(NP ?agr ?x ?np) 
+(VP ?agr ?x ?vp)) 
+
+If we were to alter this rule to produce a simplified semantic interpretation, it would 
+look like the following, where the predicate and* simplifies a list of conjunctions into 
+a single conjunction: 
+
+
+<a id='page-705'></a>
+(rule (S ?sem) --> 
+(np ?agr ?x ?np) 
+(vp ?agr ?x ?vp) 
+(:test (ancl*(?np ?vp) ?sem))) 
+
+Many rules will have this form, so we adopt a simple convention: if the last argument 
+of the constituent on the left-hand side of a rule is the keyword : sem, then we will 
+build the semantics by replacing : sem with a conjunction formed by combining all 
+the last arguments of the constituents on the right-hand side of the rule. A==> arrow 
+will be used for rules that follow this convention, so the following rule is equivalent 
+to the one above: 
+
+(rule (S :sem) ==> 
+(NP ?agr ?x ?np) 
+(VP ?agr ?x ?vp)) 
+
+It is sometimes useful to introduce additional semantics that does not come from one 
+of the constituents. This can be indicated with an element of the right-hand side that 
+is a list starting with : sem. For example, the following rule adds to the semantics the 
+fact that ?x is the topic of the sentence: 
+
+(rule (S ;sem) ==> 
+(NP ?agr ?x ?np) 
+(VP ?agr ?x ?vp) 
+(:sem (topic ?x))) 
+
+Before implementing the rule function for the ==> arrow, it is worth considering if 
+there are other ways we could make things easier for the rule writer. One possibility is 
+to provide a notation for describing examples. Examples make it easier to understand 
+what a rule is designed for. For the S rule, we could add examples like this: 
+
+(rule (S :sem) ==> 
+(:ex "John likes Mary" "He sleeps") 
+(NP ?agr ?x ?np) 
+(VP ?agr ?x ?vp)) 
+
+These examples not only serve as documentation for the rule but also can be stored 
+under S and subsequently run when we want to test if S is in fact implemented 
+properly. 
+
+Another area where the rule writer could use help is in handling left-recursive 
+
+rules. Consider the rule that says that a sentence can consist of two sentences joined 
+
+by a conjunction: 
+
+
+<a id='page-706'></a>
+
+(rule (S (?conj ?sl ?s2)) ==> 
+(:ex "John likes Mary and Mary likes John") 
+(S ?sl) 
+(Conj ?conj) 
+(S ?s2)) 
+
+While this rule is correct as a declarative statement, it will run into difficulty when 
+run by the standard top-down depth-first DCG interpretation process. The top-level 
+goal of parsing an S will lead immediately to the subgoal of parsing an S, and the 
+result will be an infinite loop. 
+
+Fortunately, we know how to avoid this kind of infinite loop: split the offending 
+predicate, S, into two predicates: one that supports the recursion, and one that is at 
+a lower level. We will call the lower-level predicate S_. Thus, the following rule says 
+that a sentence can consist of two sentences, where the first one is not conjoined and 
+the second is possibly conjoined: 
+
+(rule (S (?conj ?sl ?s2)) ==> 
+
+(S- ?sl) 
+
+(Conj ?conj) 
+
+(S ?s2)) 
+
+We also need a rule that says that a possibly conjoined sentence can consist of a 
+nonconjoined sentence: 
+
+(rule (S ?sem) ==> (S_ ?sem)) 
+
+To make this work, we need to replace any mention of S in the left-hand side of a rule 
+with S_. References to S in the right-hand side of rules remain unchanged. 
+
+(rule (S_ ?sem) ==> ...) 
+
+To make this all automatic, we will provide a macro, conj-rule, that declares a 
+category to be one that can be conjoined. Such a declaration will automatically 
+generate the recursive and nonrecursive rules for the category, and will insure that 
+future references to the category on the left-hand side of a rule will be replaced with 
+the corresponding lower-level predicate. 
+
+One problem with this approach is that it imposes a right-branching parse on 
+multiple conjoined phrases. That is, we will get parses like "spaghetti and (meatballs 
+and salad)" not "(spaghetti and meatballs) and salad." Clearly, that is the wrong 
+interpretation for this sentence. Still, it can be argued that it is best to produce 
+a single canonical parse, and then let the semantic interpretation functions worry 
+about rearranging the parse in the right order. We will not attempt to resolve this 
+
+
+<a id='page-707'></a>
+debate but will provide the automatic conjunction mechanism as a tool that can be 
+convenient but has no cost for the user who prefers a different solution. 
+
+We are now ready to implement the extended DCG rule formalism that handles 
+:sem, :ex, and automatic conjunctions. The function make-augmented-dcg, stored 
+under the arrow = =>, will be used to implement the formalism: 
+
+(setf (get '==> 'rule-function) 'make-augmented-dcg) 
+
+(defun make-augmented-dcg (head body) 
+"Build an augmented DCG rule that handles :sem. :ex, 
+and automatic conjunctiontive constituents." 
+(if (eq (lastl head) :sem) 
+
+;; Handle :sem 
+
+(let* ((?sem (gensym "?SEM"))) 
+
+(make-augmented-dcg 
+'(.(butlast head) .?sem) 
+'(.(remove :sem body :key #'first-or-nil) 
+
+(:test .(collect-sems body ?sem))))) 
+Separate out examples from body 
+(multiple-value-bind (exs new-body) 
+(partition-if #'(lambda (x) (starts-with . :ex)) body) 
+Handle conjunctions 
+(let ((rule '(rule .(handle-conj head) --> .new-body))) 
+
+(if (null exs) 
+rule 
+'(progn (:ex .head ..(mappend #'rest exs)) 
+
+.rule)))))) 
+
+First we show the code that collects together the semantics of each constituent and 
+conjoins them when :sem is specified. The function collect-sems picks out the 
+semantics and handles the trivial cases where there are zero or one constituents on 
+the right-hand side. If there are more than one, it inserts a call to the predicate and*. 
+
+(defun collect-sems (body ?sem) 
+"Get the semantics out of each constituent in body, 
+and combine them together into ?sem." 
+(let ((sems (loop for goal in body 
+
+unless (or (dcg-normal-goal-p goal) 
+(dcg-word-list-p goal) 
+(starts-with goal :ex) 
+(atom goal)) 
+
+collect (lastl goal)))) 
+
+(case (length sems) 
+(0 '(= .?sem t)) 
+(1 '(= .?sem .(first sems))) 
+(t '(and* .sems .?sem))))) 
+
+
+<a id='page-708'></a>
+
+We could have implemented and* with Prolog clauses, but it is slightly more efficient 
+to do it directly in Lisp. A call to conjuncts collects all the conjuncts, and we then 
+add an and if necessary: 
+
+(defun and*/2 (in out cont) 
+"IN is a list of conjuncts that are conjoined into OUT." 
+E.g.: (and* (t (and a b) t (and c d) t) ?x) ==> 
+;; ?x= (and abed) 
+(if (unify! out (maybe-add 'and (conjuncts (cons 'and in)) t)) 
+(funcall cont))) 
+
+(defun conjuncts (exp) 
+"Get all the conjuncts from an expression." 
+(deref exp) 
+(cond ((eq exp t) nil) 
+
+((atom exp) (list exp)) 
+((eq (deref (first exp)) 'nil) nil) 
+((eq (first exp) 'and) 
+
+(mappend #'conjuncts (rest exp))) 
+(t (list exp)))) 
+
+The next step is handling example phrases. The code in make-augmented-dcg turns 
+examples into expressions of the form: 
+
+(:ex (S ?sem) "John likes Mary" "He sleeps") 
+
+To make this work, : ex will have to be a macro: 
+
+(defmacro :ex ((category . args) &body examples) 
+"Add some example phrases, indexed under the category." 
+'(add-examples ',category ',args ',examples)) 
+
+: ex calls add-exampl es to do all the work. Each example is stored in a hash table 
+indexed under the the category. Each example is transformed into a two-element list: 
+the example phrase string itself and a call to the proper predicate with all arguments 
+supplied. The function add-exampl es does this transformation and indexing, and 
+run-examples retrieves the examples stored under a category, prints each phrase, 
+and calls each goal. The auxiliary functions get-exampl es and cl ear-exampl es are 
+provided to manipulate the example table, and remove-punction, punctuation-p 
+and stri ng ->1 i st are used to map from a string to a Hst of words. 
+
+(defvar *examples* (make-hash-table :test #'eq)) 
+
+(defun get-examples (category) (gethash category *examples*)) 
+
+(defun clear-examples () (clrhash *examples*)) 
+
+
+<a id='page-709'></a>
+(defun add-examples (category args examples) 
+"Add these example strings to this category, 
+and when it comes time to run them, use the args." 
+(dolist (example examples) 
+
+(when (stringp example) 
+(let ((ex '(.example 
+(.category .@args 
+.(string->list 
+(remove-punctuation example)) ())))) 
+(unless (member ex (get-examples category) 
+:test #'equal) 
+(setf (gethash category ^examples*) 
+(nconc (get-examples category) (1 ist ex)))))))) 
+
+(defun run-examples (&optional category) 
+"Run all the example phrases stored under a category. 
+With no category, run ALL the examples." 
+(prolog-compi1e-symbols) 
+(if (null category) 
+
+(maphash #'(lambda (cat val) 
+(declare (ignore val)) 
+(format t "~2&Examples of ~a:~&" cat) 
+(run-examples cat)) 
+
+^examples*) 
+
+(dolist (example (get-examples category)) 
+(format t "~2&EXAMPLE: ~{~a~r9T~a~}" example) 
+(top-level-prove (cdr example))))) 
+
+(defun remove-punctuation (string) 
+"Replace punctuation with spaces in string. " 
+(substitute-if #\space #'punctuation-p string)) 
+
+(defun string->list (string) 
+"Convert a string to a list of words." 
+(read-from-string(concatenate 'string "("string ")"))) 
+
+(defun punctuation-p (char) (find char "*...;:'!?#-()\\\"")) 
+
+The final part of our augmented DCG formalism is handling conjunctive constituents 
+automatically. We already arranged to translate category symbols on the left-hand 
+side of rules into the corresponding conjunctive category, as specified by the function 
+handl e-con j. We also want to generate automatically (or as easily as possible) rules 
+of the following form: 
+
+(rule (S (?conj ?sl ?s2)) ==> 
+(S_ ?sl) 
+(Conj ?conj) 
+(S ?s2)) 
+
+
+<a id='page-710'></a>
+
+(rule (S ?sem) ==> (S_ ?sem)) 
+
+But before we generate these rules, let's make sure they are exactly what we want. 
+Consider parsing a nonconjoined sentence with these two rules in place. The first 
+rule would parse the entire sentence as a S_, and would then fail to see a Con j, and thus 
+fail. The second rule would then duplicate the entire parsing process, thus doubling 
+the amount of time taken. If we changed the order of the two rules we would be able 
+to parse nonconjoined sentences quickly, but would have to backtrack on conjoined 
+sentences. 
+
+The following shows a better approach. A single rule for S parses a sentence 
+with S_, and then calls Conj.S, which can be read as "either a conjunction followed 
+by a sentence, or nothing." If the first sentence is followed by nothing, then we just 
+use the semantics of the first sentence; if there is a conjunction, we have to form a 
+combined semantics. I have added ... to show where arguments to the predicate 
+other than the semantic argument fit in. 
+
+(rule (S ... ?s-combi ned) ==> 
+(S_ ... ?seml) 
+(Conj_S ?seml ?s-combined)) 
+
+(rule (Conj.S ?seml (?conj ?seml ?sem2)) ==> 
+(Conj ?conj) 
+(S ... ?sem2)) 
+
+(rule (Conj_S ?seml ?seml) ==>) 
+
+Now all we need is a way for the user to specify that these three rules are desired. 
+Since the exact method of building up the combined semantics and perhaps even 
+the call to Conj may vary depending on the specifics of the grammar being defined, 
+the rules cannot be generated entirely automatically. We will settle for a macro, 
+conj - rule, that looks very much like the second of the three rules above but expands 
+into all three, plus code to relate S_ to S. So the user will type: 
+
+(conj-rule (Conj.S ?seml (?conj ?seml ?sem2)) ==> 
+(Conj ?conj) 
+(S ?a ?b ?c ?sem2)) 
+
+Here is the macro definition: 
+
+(defmacro conj-rule ((conj-cat semi combined-sem) ==> 
+
+conj (cat . args)) 
+"Define this category as an automatic conjunction." 
+'(progn 
+
+(setf (get ',cat 'conj-cat) '.(symbol cat '_)) 
+
+
+<a id='page-711'></a>
+(rule (.cat ,@(butlast args) ?combined-sem) ==> 
+(.(symbol cat '_) .(butlast args) .semi) 
+(.conj-cat ,seml ?combined-sem)) 
+
+(rule (,conj-cat .semi .combined-sem) ==> 
+.conj 
+(.cat .args)) 
+
+(rule (.conj-cat ?seml ?seml) ==>))) 
+
+and here we define handl e-conj to substitute S_for S in the left-hand side of rules: 
+
+(defun handle-conj (head) 
+"Replace (Cat ...) with (Cat. ...) if Cat is declared 
+as a conjunctive category." 
+(if (and (listp head) (conj-category (predicate head))) 
+
+(cons (conj-category (predicate head)) (args head)) 
+head)) 
+
+(defun conj-category (predicate) 
+"If this is a conjunctive predicate, return the Cat. symbol." 
+(get predicate 'conj-category)) 
+
+20.8 History and References 
+As we have mentioned, Alain Colmerauer invented Prolog to use in his grammar of 
+French (1973). His metamorphosis grammar formalismwas more expressive but much 
+less efficient than the standard DCG formalism. 
+
+The grammar in section 20.4 is essentially the same as the one presented in Fernando 
+Pereira and David H. D. Warren's 1980 paper, which introduced the Definite 
+Clause Grammar formalism as it is known today. The two developed a much more 
+substantial grammar and used it in a very influential question-answering system 
+called Chat-80 (Warren and Pereira, 1982). Pereira later teamed with Stuart Shieber 
+on an excellent book covering logic grammars in more depth: Prolog and Natural-
+Language Analysis (1987). The book has many strong points, but unfortunately it does 
+not present a grammar anywhere near as complete as the Chat-80 grammar. 
+
+The idea of a compositional semantics based on mathematical logic owes much 
+to the work of the late linguist Richard Montague. The introduction by Dowty, Wall, 
+and Peters (1981) and the collection by Rich Thomason (1974) cover Montague's 
+approach. 
+
+The grammar in section 20.5 is based loosely on Michael McCord's modular logic 
+grammar, as presented in Walker et al. 1990. 
+It should be noted that logic grammars are by no means the only approach to 
+natural language processing. Woods (1970) presents an approach based on the 
+
+
+<a id='page-712'></a>
+
+augmented transition network, or ATN. A transition network is like a context-free 
+grammar. The augmentation is a way of manipulating features and semantic values. 
+This is just like the extra arguments in DCGs, except that the basic operations are 
+setting and testing variables rather than unification. So the choice between ATNs and 
+DCGs is largely a matter of what programming approach you are most comfortable 
+with: procedural for ATNs and declarative for DCGs. My feeling is that unification is 
+a more suitable primitive than assignment, so I chose to present DCGs, even though 
+this required bringing in Prolog's backtracking and unification mechanisms. 
+In either approach, the same linguistic problems must be addressed - agreement, 
+long-distance dependencies, topicalization, quantifier-scope ambiguity, and so on. 
+Comparing Woods's (1970) ATN grammar to Pereira and Warren's (1980) DCG grammar, 
+the careful reader will see that the solutions have much in common. The analysis 
+is more important than the notation, as it should be. 
+20.9 Exercises 
+&#9635; Exercise 20.2 [m] Modify the grammar (from section 20.4, 20.5,
+for adjectives before a noun. 
+or 20.6) to allow 
+
+&#9635; Exercise 20.3 [m] Modify the grammar to allow for prepositional phrase modifiers 
+on verb and noun phrases. 
+
+&#9635; Exercise 20.4 [m] Modify the grammar to allow for ditransitive verbs?erbs that 
+take two objects, as in "give the dog a bone." 
+
+&#9635; Exercise 20.5 Suppose we wanted to adopt the Prolog convention of writing DCG 
+tests and words in brackets and braces, respectively. Write a function that will alter 
+the readtable to work this way. 
+
+&#9635; Exercise 20.6 [m] Define a rule function for a new type of DCG rule that automatically 
+builds up a syntactic parse of the input. For example, the two rules: 
+(rule is) => (np) (vp)) 
+(rule (np) => (iword he)) 
+should be equivalent to: 
+
+
+<a id='page-713'></a>
+(rule (s (s ?1 ?2)) --> (np ?1) (vp 12)) 
+(rule (np (np he)) --> (:word he)) 
+
+&#9635; Exercise 20.7 [m] There are advantages and disadvantages to the approach that 
+Prolog takes in dividing predicates into clauses. The advantage is that it is easy to 
+add a new clause. The disadvantage is that it is hard to alter an existing clause. If 
+you edit a clause and then evaluate it, the new clause will be added to the end of the 
+clause list, when what you really wanted was for the new clause to take the place 
+of the old one. To achieve that effect, you have to call cl ear-predicate, and then 
+reload all the clauses, not just the one that has been changed. 
+
+Write a macro named - rul e that is just like rul e, except that it attaches names to 
+clauses. When a named rule is reloaded, it replaces the old clause rather than adding 
+a new one. 
+
+&#9635; Exercise 20.8 [h] Extend the DCG rule function to allow or goals in the right-hand 
+side. To make this more useful, also allow and goals. For example: 
+
+(rule (A) --> (B) (or (C) (and (D) (E))) (F)) 
+
+should compile into the equivalent of: 
+
+(<- (A ?S0 ?S4) 
+(B ?S0 ?S1) 
+(OR (AND (C ?S1 ?S2) (= ?S2 ?S3)) 
+
+(AND (D ?S1 ?S2) (E ?S2 ?S3))) 
+(F ?S3 ?S4)) 
+
+20.10 Answers 
+Answer 20.1 It uses local variables (?s0, ?sl ...) that are not guaranteed to be 
+unique. This is a problem if the grammar writer wants to use these symbols anywhere 
+in his or her rules. The fix is to gensym symbols that are guaranteed to be unique. 
+
+
+<a id='page-714'></a>
+
+Answer 20.5 
+
+(defun setup-braces (&optional (on? t) (readtable *readtable*)) 
+"Make Ca b] read as (:word a b) and {a b} as (rtest a b c) 
+if ON? is true; otherwise revert {[]} to normal." 
+(if (not on?) 
+
+(map nil #'(lambda (c) 
+(set-macro-character c (get-macro-character #\a) 
+t readtable)) 
+"{[]}") 
+(progn 
+(set-macro-character 
+#\] (get-macro-character #\)) nil readtable) 
+(set-macro-character 
+#\} (get-macro-character #\)) nil readtable) 
+(set-macro-character 
+#\[ #'(lambda (s ignore) 
+(cons :word (read-delimited-1ist #\] s t))) 
+nil readtable) 
+(set-macro-character 
+#\{ #'(lambda (s ignore) 
+(cons rtest (read-delimited-1ist #\} s t))) 
+nil readtable)))) 
+
+
+## Chapter 21
+<a id='page-715'></a>
+
+A Grammar of English 
+
+Prefer geniality to grammar. 
+
+- Henry Watson Fowler 
+
+The King's English 906) 
+
+I I 1 he previous two chapters outline techniques for writing grammars and parsers based on 
+
+I those grammars. It is quite straightforward to apply these techniques to applications 
+
+JL like the CD player problem where input is limited to simple sentences like "Play 1 to 
+8 without 3." But it is a major undertaking to write a grammar for unrestricted English input. 
+This chapter develops a grammar that covers all the major syntactic constructions of English. It 
+handles sentences of much greater complexity, such as "Kim would not have been persuaded 
+by Lee to look after the dog." The grammar is not comprehensive enough to handle sentences 
+chosen at random from a book, but when augmented by suitable vocabulary it is adequate for a 
+wide variety of applications. 
+
+This chapter is organized as a tour through the English language. We first cover noun 
+phrases, then verb phrases, clauses, and sentences. For each category we introduce examples, 
+analyze them linguistically, and finally show definite clause grammar rules that correspond to 
+the analysis. 
+
+
+<a id='page-716'></a>
+
+As the last chapter should have made clear, analysis more often results in complication 
+than in simplification. For example, starting with a simple rule like (S 
+- -> . . VP), we soon find that we have to add arguments to handle agreement, semantics, 
+and gapping information. Figure 21.1 lists the grammatical categories and 
+their arguments. Note that the semantic argument, sem, is always last, and the gap 
+accumulators, gapl and gap2, are next-to-last whenever they occur. All single-letter 
+arguments denote metavariables; for example, each noun phrase (category NP) will 
+have a semantic interpretation, sem, that is a conjunction of relations involving the 
+variable x. Similarly, the h in modif i ers is a variable that refers to the head - the thing 
+that is being modified. The other arguments and categories will be explained in turn, 
+but it is handy to have this figure to refer back to. 
+
+Category Arguments 
+Preterminals 
+
+name agr name 
+verb verb inflection slots . sem 
+rel-pro case type 
+
+pronoun agr case wh . sem 
+art agr quant 
+adj X sem 
+cardinal number agr 
+ordinal number 
+prep prep sem 
+noun agr slots . sem 
+aux inflection needs-inflection . sem 
+adverb X sem 
+
+Nonterminals 
+
+S s sem 
+aux-inv-S subject s sem 
+clause inflection . int-subj . gapl gap2 sem 
+subject agr . subj-slot int-subj gapl gap2 sem 
+VP inflection . subject-slot . gapl gap2 vp 
+
+NP agr case wh . gapl gap2 np 
+NP2 agr case . gapl gap2 sem 
+
+PP prep role wh np . gapl gap2 sem 
+XP slot constituent wh . gapl gap2 sem 
+Det agr wh . restriction sem 
+rel-clause agr . sem 
+modifiers pre/post cat info slots h gapl gap2 sem 
+complement cat info slot h gapl gap2 sem 
+adjunct pre/post cat info h gapl gap2 sem 
+advp wh X gapl gap2 sem 
+
+Figure 21.1: Grammatical Categories and their Arguments 
+
+
+<a id='page-717'></a>
+21.1 Noun Phrases 
+The simplest noun phrases are names and pronouns, such as "Kim" and "them." 
+The rules for these cases are simple: we build up a semantic expression from a name 
+or pronoun, and since there can be no gap, the two gap accumulator arguments are 
+the same (?gl). Person and number agreement is propagated in the variable ?agr, 
+and we also keep track of the case of the noun phrase. English has three cases that 
+are reflected in certain pronouns. In the first person singular, ". is the nominative or 
+subjective case, "me" is the accusative or objective case, and "my" is the genitive case. To 
+distinguish them from the genitive, we refer to the nominative and the objective cases 
+as the common cases. Accordingly, the three cases will be marked by the expressions 
+(common nom), (common obj), and gen, respectively. Many languages of the world 
+have suffixes that mark nouns as being one case or another, but English does not. 
+Thus, we use the expression (common ?) to mark nouns. 
+
+We also distinguish between noun phrases that can be used in questions, like 
+"who," and those that cannot. The ?wh variable has the value +wh for noun phrases 
+like "who" or "which one" and - wh for nonquestion phrases. Here, then, are the rules 
+for names and pronouns. The predicates name and pronoun are used to look up words 
+in the lexicon. 
+
+(rule (NP ?agr (common ?) -wh ?x ?gl ?gl (the ?x (name ?name ?x))) ==> 
+(name ?agr ?name)) 
+
+(rule (NP ?agr ?case ?wh ?x ?gl ?gl ?sem) ==> 
+(pronoun ?agr ?case ?wh ?x ?sem)) 
+
+Plural nouns can stand alone as noun phrases, as in "dogs," but singular nouns need 
+a determiner, as in "the dog" or "Kim's friend's biggest dog." Plural nouns can also 
+take a determiner, as in "the dogs." The category Det is used for determiners, and 
+NP2 is used for the part of a noun phrase after the determiner: 
+
+(rule (NP (---+) ?case -wh ?x ?gl ?g2 (group ?x ?sem)) ==> 
+(:ex "dogs") ; Plural nouns don't need a determiner 
+(NP2 ( +) ?case ?x ?gl ?g2 ?sem)) 
+
+(rule (NP ?agr (common ?) ?wh ?x ?gl ?g2 ?sem) ==> 
+(:ex "Every man" "The dogs on the beach") 
+(Det ?agr ?wh ?x ?restriction ?sem) 
+(NP2 ?agr (common ?) ?x ?gl ?g2 ?restriction)) 
+
+Finally, a noun phrase may appear externally to a construction, in which case the 
+noun phrase passed in by the first gap argument will be consumed, but no words 
+from the input will be. An example is the u in "Whom does Kim like 
+
+
+<a id='page-718'></a>
+
+(rule (NP ?agr ?case ?wh ?x (gap (NP ?agr ?case ?x)) (gap nil) t) 
+==> Gapped NP 
+) 
+
+Now we address the heart of the noun phrase, the NP2 category. The lone rule for NP2 
+says that it consists of a noun, optionally preceded and followed by modifiers: 
+
+(rule (NP2 ?agr (common ?) ?x ?gl ?g2 :sem) ==> 
+
+(modifiers pre noun ?agr () ?x (gap nil) (gap nil) ?pre) 
+
+(noun ?agr ?slots ?x ?noun) 
+
+(modifiers post noun ?agr ?slots ?x ?gl ?g2 ?post)) 
+
+21.2 Modifiers 
+Modifiers are split into type types: Complements are modifiers that are expected by the 
+head category that is being modified; they cannot stand alone. Adjuncts are modifiers 
+that are not required but bring additional information. The distinction is clearest 
+with verb modifiers. In "Kim visited Lee yesterday," "visited" is the head verb, "Lee" 
+is a complement, and "yesterday" is an adjunct. Returning to nouns, in "the former 
+mayor of Boston," "mayor" is the head noun, "of Boston" is a complement (although 
+an optional one) and "former" is an adjunct. 
+
+The predicate modi f i ers takes eight arguments, so it can be tricky to understand 
+them all. The first two arguments tell if we are before or after the head (pre or 
+post) and what kind of head we are modifying (noun, verb, or whatever). Next is 
+an argument that passes along any required information - in the case of nouns, it 
+is the agreement feature. The fourth argument is a list of expected complements, 
+here called ?slots. Next is the metavariable used to refer to the head. The final 
+three arguments are the two gap accumulators and the semantics, which work the 
+same way here as we have seen before. Notice that the lexicon entry for each Noun 
+can have a list of complements that are considered as postnoun modifiers, but there 
+can be only adjuncts as prenoun modifiers. Also note that gaps can appear in the 
+postmodifiers but not in the premodifiers. For example, we can have "What is Kevin 
+the former mayor of where the answer might be "Boston." But even though 
+we can construct a noun phrase like "the education president," where "education" 
+is a prenoun modifier of "president," we cannot construct "* What is George the u 
+president?," intending that the answer be "education." 
+
+There are four cases for modification. First, a complement is a kind of modifier. 
+Second, if a complement is marked as optional, it can be skipped. Third, an adjunct 
+can appear in the input. Fourth, if there are no complements expected, then there 
+need not be any modifiers at all. The following rules implement these four cases: 
+
+
+<a id='page-719'></a>
+
+(rule (modifiers ?pre/post ?cat ?info (?slot . ?slots) ?h 
+
+?gl ?g3 :sem) ==> 
+(complement ?cat ?info ?slot ?h ?gl ?g2 ?mod) 
+(modifiers ?pre/post ?cat ?info ?slots ?h ?g2 ?g3 ?mods)) 
+
+(rule (modifiers ?pre/post ?cat ?info ((? (?) ?) . ?slots) ?h 
+?gl ?g2 ?mods) == > 
+(modifiers ?pre/post ?cat ?info ?slots ?h ?gl ?g2 ?mods)) 
+
+(rule (modifiers ?pre/post ?cat ?info ?slots ?h ?gl ?g3 :sem) ==> 
+(adjunct ?pre/post ?cat ?info ?h ?gl ?g2 ?adjunct) 
+(modifiers ?pre/post ?cat ?info ?slots ?h ?g2 ?g3 ?mods)) 
+
+(rule (modifiers ???()? ?gl ?gl t) ==> ) 
+
+We need to say more about the Ust of complements, or slots, that can be associated 
+with words in the lexcion. Each slot is a list of the form i role number form), where 
+the role refers to some semantic relation, the number indicates the ordering of the 
+complements, and the form is the type of constituent expected: noun phrase, verb 
+phrase, or whatever. The details will be covered in the following section on verb 
+phrases, and compi ement will be covered in the section on XPs. For now, we give a 
+single example. The complement list for one sense of the verb "visit" is: 
+
+((agt 1 (NP ?)) (obj 2 (NP ?))) 
+
+This means that the first complement, the subject, is a noun phrase that fills the agent 
+role, and the second complement is also a noun phrase that fills the object role. 
+
+21.3 Noun Modifiers 
+There are two main types of prenoun adjuncts. Most common are adjectives, as 
+in "big slobbery dogs." Nouns can also be adjuncts, as in "water meter" or "desk 
+lamp." Here it is clear that the second noun is the head and the first is the modifier: 
+a desk lamp is a lamp, not a desk. These are known as noun-noun compounds. In 
+the following rules, note that we do not need to say that more than one adjective is 
+allowed; this is handled by the rules for modi f i ers. 
+
+(rule (adjunct pre noun ?info ?x ?gap ?gap ?sem) ==> 
+(adj ?x ?sem)) 
+
+(rule (adjunct pre noun ?info ?h ?gap ?gap :sem) ==> 
+(:sem (noun-noun ?h ?x)) 
+(noun ?agr () ?x ?sem)) 
+
+After the noun there is a wider variety of modifiers. Some nouns have complements. 
+
+
+<a id='page-720'></a>
+
+which are primarily prepositional phrases, as in "mayor of Boston." These will be 
+covered when we get to the lexical entries for nouns. Prepositional phrases can be 
+adjuncts for nouns or verbs, as in "man in the middle" and "slept for an hour." We 
+can write one rule to cover both cases: 
+
+(rule (adjunct post ?cat ?info ?x ?gl ?g2 ?sem) ==> 
+(PP ?prep ?prep ?wh ?np ?x ?gl ?g2 ?sem)) 
+
+Here are the rules for prepositional phrases, which can be either a preposition 
+followed by a noun phrase or can be gapped, as in "to whom are you speaking 
+The object of a preposition is always in the objective case: "with him" not "*with he." 
+
+(rule (PP ?prep ?role ?wh ?np ?x ?gl ?g2 :sem) ==> 
+(prep ?prep t) 
+(:sem (?role ?x ?np)) 
+(NP ?agr (common obj) ?wh ?np ?gl ?g2 ?np-sem)) 
+
+(rule (PP ?prep ?role ?wh ?np ?x 
+(gap (PP ?prep ?role ?np ?x)) (gap nil) t) ==> ) 
+
+Nouns can be modified by present participles, past participles, and relative clauses. 
+Examples are "the man eating the snack," "the snack eaten by the man," and "the 
+man that ate the snack," respectively. We will see that each verb in the lexicon is 
+marked with an inflection, and that the marker - i ng is used for present participles 
+while - en is used for past participles. The details of the clause will be covered later. 
+
+(rule (adjunct post noun ?agr ?x ?gap ?gap ?sem) ==> 
+(:ex (the man) "visiting me" (the man) "visited by me") 
+(:test (member ?infl (-ing passive))) 
+(clause ?infl ?x ? ?v (gap (NP ?agr ? ?x)) (gap nil) ?sem)) 
+
+(rule (adjunct post noun ?agr ?x ?gap ?gap ?sem) ==> 
+(rel-clause ?agr ?x ?sem)) 
+
+It is possible to have a relative clause where it is an object, not the subject, that the 
+head refers to: "the snack that the man ate." In this kind of relative clause the relative 
+pronoun is optional: "The snack the man ate was delicious." The following rules say 
+that if the relative pronoun is omitted then the noun that is being modified must be 
+an object, and the relative clause should include a subject internally. The constant 
+int-subj indicates this. 
+
+(rule (rel-clause ?agr ?x :sem) ==> 
+(:ex (the man) "that she liked" "that liked her" 
+"that I know Lee liked") 
+
+
+<a id='page-721'></a>
+(opt-rel-pronoun ?case ?x ?int-subj ?rel-sem) 
+(clause (finite ? ?) ? ?int-subj ?v 
+(gap (NP ?agr ?case ?x)) (gap nil) ?clause-sem)) 
+
+(rule (opt-rel-pronoun ?case ?x ?int-subj (?type ?x)) ==> 
+(rword ?rel-pro) 
+
+(:test (word ?rel-pro rel-pro ?case ?type))) 
+
+(rule (opt-rel-pronoun (common obj) ?x int-subj t) ==> ) 
+
+It should be noted that it is rare but not impossible to have names and pronouns 
+with modifiers: "John the Baptist/' "lovely Rita, meter maid," "Lucy in the sky with 
+diamonds," "Sylvia in accounting on the 42nd floor," "she who must be obeyed," 
+Here and throughout this chapter we will raise the possibility of such rare cases, 
+leaving them as exercises for the reader. 
+
+21.4 Determiners 
+We will cover three kinds of determiners. The simplest is the article: "a dog" or "the 
+dogs." We also allow genitive pronouns, as in "her dog," and numbers, as in "three 
+dogs." The semantic interpretation of a determiner-phrase is of the form (quantifier 
+variable restriction). ... example A Si ?x (dog ?x)) or ((number 3) ?x (dog ?x)). 
+
+(rule (Det ?agr ?wh ?x ?restriction (?art ?x ?restriction)) ==> 
+(:ex "the" "every") 
+(art ?agr ?art) 
+(:test (if (= ?art wh) (= ?wh +wh) (= ?wh -wh)))) 
+
+(rule (Det ?agr ?wh ?x ?r (the ?x ?restriction)) ==> 
+(:ex "his" "her") 
+(pronoun ?agr gen ?wh ?y ?sem) 
+(:test (and* ((genitive ?y ?x) ?sem ?r) ?restriction))) 
+
+(rule (Det ?agr -wh ?x ?r ((number ?n) ?x ?r)) ==> 
+(:ex "three") 
+(cardinal ?n ?agr)) 
+
+These are the most important determiner types, but there are others, and there are 
+pre- and postdeterminers that combine in restricted combinations. Predeterminers 
+include all, both, half, double, twice, and such. Postdeterminers include every, 
+many, several, and few. Thus, we can say "all her many good ideas" or "all the King's 
+men." But we can not say "*all much ideas" or "*the our children." The details are 
+complicated and are omitted from this grammar. 
+
+
+<a id='page-722'></a>
+
+21.5 Verb Phrases 
+Now that we have defined modi f i ers, verb phrases are easy. In fact, we only need 
+two rules. The first says a verb phrase consists of a verb optionally preceded and 
+followed by modifiers, and that the meaning of the verb phrase includes the fact that 
+the subject fills some role: 
+
+(rule (VP ?infl ?x ?subject-slot ?v ?gl ?g2 :sem) ==> 
+(:ex "sleeps" "quickly give the dog a bone") 
+(modifiers pre verb ? () ?v (gap nil) (gap nil) ?pre-sem) 
+(:sem (?role ?v ?x)) (:test (= ?subject-slot (?role 1 ?))) 
+(verb ?verb ?infl (?subject-slot . ?slots) ?v ?v-sem) 
+(modifiers post verb ? ?slots ?v ?gl ?g2 ?mod-sem)) 
+
+The VP category takes seven arguments. The first is an inflection, which represents 
+the tense of the verb. To describe the possibilities for this argument we need a quick 
+review of some basic Unguistics. A sentence must have a finite verb, meaning a 
+verb in the present or past tense. Thus, we say "Kim likes Lee," not "*Kim liking 
+Lee." Subject-predicate agreement takes effect for finite verbs but not for any other 
+tense. The other tenses show up as complements to other verbs. For example, the 
+complement to "want" is an infinitive: "Kim wants to like Lee" and the complement 
+to the modal auxiliary verb "would" is a nonf inite verb: "Kim would like Lee." If this 
+were in the present tense, it would be "likes," not "like." The inflection argument 
+takes on one of the forms in the table here: 
+
+Expression Type Example 
+(finite ?agr present) present tense eat, eats 
+(finite ?agr past) past tense ate 
+nonfinite nonfinite eat 
+infinitive infinitive to eat 
+-en past participle eaten 
+-ing present participle eating 
+
+The second argument is a metavariable that refers to the subject, and the third is 
+the subject's complement slot. We adopt the convention that the subject slot must 
+always be the first among the verb's complements. The other slots are handled by 
+the postverb modifiers. The fourth argument is a metavariable indicating the verb 
+phrase itself. The final three are the familiar gap and semantics arguments. As an 
+example, if the verb phrase is the single word "slept," then the semantics of the verb 
+phrase will be (and (past ?v) (sleep ?v)). Of course, adverbs, complements, 
+and adjuncts will also be handled by this rule. 
+
+The second rule for verb phrases handles auxiliary verbs, such as "have," "is" 
+and "would." Each auxiliary verb (or aux) produces a verb phrase with a particular 
+
+
+<a id='page-723'></a>
+
+inflection when followed by a verb phrase with the required inflection. To repeat 
+an example, "would" produces a finite phrase when followed by a nonfinite verb. 
+"Have" produces a nonfinite when followed by a past participle. Thus, "would have 
+liked" is a finite verb phrase. 
+
+We also need to account for negation. The word "not" can not modify a bare main 
+verb but can follow an auxiliary verb. That is, we can't say "*Kim not like Lee," but 
+we can add an auxiliary to get "Kim does not like Lee." 
+
+(rule (VP ?infl ?x ?subject-slot ?v ?gl ?g2 :sem) ==> 
+(:ex "is sleeping" "would have given a bone to the dog." 
+"did not sleep" "was given a bone by this old man") 
+
+An aux verb, followed by a VP 
+(aux ?infl ?needs-infl ?v ?aux) 
+(modifiers post aux ? () ?v (gap nil) (gap nil) ?mod) 
+(VP ?needs-infl ?x ?subject-slot ?v ?gl ?g2 ?vp)) 
+
+(rule (adjunct post aux ? ?v ?gap ?gap (not ?v)) ==> 
+(:word not)) 
+
+21.6 Adverbs 
+Adverbs can serve as adjuncts before or after a verb: "to boldly go," "to go boldly." 
+There are some limitations on where they can occur, but it is difficult to come up 
+with firm rules; here we allow any adverb anywhere. We define the category advp 
+for adverbial phrase, but currently restrict it to a single adverb. 
+
+(rule (adjunct ?pre/post verb ?info ?v ?gl ?g2 ?sem) ==> 
+(advp ?wh ?v ?gl ?g2 ?sem)) 
+
+(rule (advp ?wh ?v ?gap ?gap ?sem) ==> 
+(adverb ?wh ?v ?sem)) 
+
+(rule (advp ?wh ?v (gap (advp ?v)) (gap nil) t) ==> ) 
+
+21.7 Clauses 
+A clause consists of a subject followed by a predicate. However, the subject need not 
+be realized immediately before the predicate. For example, in "Alice promised Bob 
+to lend him her car" there is an infinitive clause that consists of the predicate "to lend 
+him her car" and the subject "Alice." The sentence as a whole is another clause. In 
+
+
+<a id='page-724'></a>
+
+our analysis, then, a clause is a subject followed by a verb phrase, with the possibility 
+that the subject will be instantiated by something from the gap arguments: 
+
+(rule (clause ?infl ?x ?int-subj ?v ?gapl ?gap3 :sem) ==> 
+(subject ?agr ?x ?subj-slot ?int-subj ?gapl ?gap2 ?subj-sem) 
+(VP ?infl ?x ?subj-slot ?v ?gap2 ?gap3 ?pred-sem) 
+(itest (subj-pred-agree ?agr ?infl))) 
+
+There are now two possibilities for subject. In the first case it has already been 
+parsed, and we pick it up from the gap list. If that is so, then we also need to find the 
+agreement feature of the subject. If the subject was a noun phrase, the agreement will 
+be present in the gap list. If it was not, then the agreement is third-person singular. 
+An example of this is" That the Red Sox won surprises me," where the italicized phrase 
+is a non-NP subject. The fact that we need to use "surprises" and not "surprise" 
+indicates that it is third-person singular. We will see that the code (--->--) is used 
+for this. 
+
+(rule (subject ?agree ?x ?subj-slot ext-subj 
+(gap ?subj) (gap nil) t) ==> 
+Externally realized subject (the normal case for S) 
+(rtest (slot-constituent ?subj-slot ?subj ?x ?) 
+
+(if (= ?subj (NP ?agr ?case ?x)) 
+(= ?agree ?agr) 
+(= ?agree (-- + -))))) ;Non-NP subjects are 3sing 
+
+In the second case we just parse a noun phrase as the subject. Note that the fourth 
+argument to subject is either ext-subj or int-subj depending on if the subject is 
+realized internally or externally. This will be important when we cover sentences in 
+the next section. In case it was not already clear, the second argument to both clause 
+and subject is the metavariable representing the subject. 
+
+(rule (subject ?agr ?x (?role 1 (NP ?x)) int-subj ?gap ?gap ?sem) 
+= => 
+(NP ?agr (common nom) ?wh ?x (gap nil) (gap nil) ?sem)) 
+
+Finally, the rules for subject-predicate agreement say that only finite predicates need 
+to agree with their subject: 
+
+(<- (subj-pred-agree ?agr (finite ?agr ?))) 
+(<- (subj-pred-agree ? ?infl) (atom ?infl)) 
+
+
+<a id='page-725'></a>
+21.8 Sentences 
+In the previous chapter we allowed only simple declarative sentences. The current 
+grammar supports commands and four kinds of questions in addition to declarative 
+sentences. It also supports thematic fronting: placing a nonsubject at the beginning of 
+a sentence to emphasize its importance, as in "Smith he says his name is" or "Murder, 
+she wrote" or "In God we trust." In the last example it is a prepositional phrase, not a 
+noun phrase, that occurs first. It is also possible to have a subject that is not a noun 
+phrase: "That the dog didn't hark puzzled Holmes." To support all these possibilities, 
+we introduce a new category, XP, which stands for any kind of phrase. A declarative 
+sentence is then just an XP followed by a clause, where the subject of the clause may 
+or may not turn out to be the XP: 
+
+(rule (S ?s :sem) ==> 
+
+(:ex "Kim likes Lee" "Lee, I like _" "In god, we trust _" 
+
+"Who likes Lee?" "Kim likes who?") 
+(XP ?kind ?constituent ?wh ?x (gap nil) (gap nil) ?topic-sem) 
+(clause (finite ? ?) ?x ? ?s (gap ?constituent) (gap nil) ?sem)) 
+
+As it turns out, this rule also serves for two types of questions. The simplest kind 
+of question has an interrogative noun phrase as its subject: "Who likes Lee?" or 
+"What man likes Lee?" Another kind is the so-called echo question, which can be 
+used only as a reply to another statement: if I tell you Kim likes Jerry Lewis, you 
+could reasonably reply "Kim likes whoT Both these question types have the same 
+structure as declarative sentences, and thus are handled by the same rule. 
+
+The following table lists some sentences that can be parsed by this rule, showing 
+the XP and subject of each. 
+
+Sentence XP Subject 
+Kim likes Lee Kim Kim 
+Lee, Kim likes Lee Kim 
+In god, we trust In god we 
+That Kim likes Lee amazes That Kim likes Lee That Kim likes Lee 
+Who likes Lee? Who Who 
+
+The most common type of command has no subject at all: "Be quiet" or "Go to 
+your room." When the subject is missing, the meaning is that the command refers 
+toyou, the addressee of the command. The subject can also be mentioned explicitly, 
+and it can be "you," as in "You be quiet," but it need not be: "Somebody shut the 
+door" or "Everybody sing along." We provide a rule only for commands with subject 
+omitted, since it can be difficult to distinguish a command with a subject from a 
+declarative sentence. Note that commands are always nonfinite. 
+
+
+<a id='page-726'></a>
+
+(rule (S ?s :sem) ==> 
+
+Commands have implied second-person subject 
+(:ex "Give the dog a bone.") 
+(:sem (command ?s)) 
+(:sem (listener ?x)) 
+(clause nonfinite ?x ext-subj ?s 
+
+(gap (NP ? ? ?x)) (gap nil) ?sem)) 
+
+Another form of command starts with "let," as in "Let me see what I can do" and 
+"Let us all pray." The second word is better considered as the object of "let" rather 
+than the subject of the sentence, since the subject would have to be "I" or "we." This 
+kind of command can be handled with a lexical entry for "let" rather than with an 
+additional rule. 
+
+We now consider questions. Questions that can be answered by yes or no have 
+the subject and auxiliary verb inverted: "Did you see him?" or "Should I have been 
+doing this?" The latter example shows that it is only the first auxiliary verb that 
+comes before the subject. The category a ux -i ..-S is used to handle this case: 
+
+(rule (S ?s (yes-no ?s ?sem)) ==> 
+(:ex "Does Kim like Lee?" "Is he a doctor?") 
+(aux-inv-S nil ?s ?sem)) 
+
+Questions that begin with a wh-phrase also have the auxihary verb before the subject, 
+as in "Who did you see?" or "Why should I have been doing this?" The first 
+constituent can also be a prepositional phrase: "For whom am I doing this?" The 
+following rule parses an XP that must have the +wh feature and then parses an 
+aux -i nv-S to arrive at a question: 
+
+(rule (S ?s :sem) ==> 
+(:ex "Who does Kim like _?" "To whom did he give it _? " 
+
+"What dog does Kim like _?") 
+(XP ?slot ?constituent +wh ?x (gap nil) (gap nil) ?subj-sem) 
+(aux-inv-S ?constituent ?s ?sem)) 
+
+A question can also be signaled by rising intonation in what would otherwise be a 
+declarative statement: "You want some?" Since we don't have intonation information, 
+we won't include this kind of question. 
+
+The implementation for aux-inv-S is straightforward: parse an auxiliary and 
+then a clause, pausing to look for modifiers in between. (So far, a "not" is the only 
+modifier allowed in that position.) 
+
+
+<a id='page-727'></a>
+
+(rule (aux-inv-S ?constituent ?v :sem) ==> 
+(:ex "Does Kim like Lee?" (who) "would Kim have liked") 
+(aux (finite ?agr ?tense) ?needs-infl ?v ?aux-sem) 
+(modifiers post aux ? () ?v (gap nil) (gap nil) ?mod) 
+(clause ?needs-infl ?x int-subj ?v (gap ?constituent) (gap nil) 
+
+?clause-sem)) 
+
+There is one more case to consider. The verb "to be" is the most idiosyncratic in 
+English. It is the only verb that has agreement differences for anything besides third-
+person singular. And it is also the only verb that can be used in an a ux - i ..-S without 
+a main verb. An example of this is "Is he a doctor?," where "is" clearly is not an 
+auxihary, because there is no main verb that it could be auxiliary to. Other verb can 
+not be used in this way: "*Seems he happy?" and"*Didtheyit?" are ungrammatical. 
+The only possibiUty is "have," as in "Have you any wool?," but this use is rare. 
+
+The following rule parses a verb, checks to see that it is a version of "be," and then 
+parses the subject and the modifiers for the verb. 
+
+(rule (aux-inv-S ?ext ?v :sem) ==> 
+(:ex "Is he a doctor?") 
+(verb ?be (finite ?agr ?) ((?role ?n ?xp) . ?slots) ?v ?sem) 
+(rtest (word ?be be)) 
+(subject ?agr ?x (?role ?n ?xp) int-subj 
+
+(gap nil) (gap nil) ?subj-sem) 
+(:sem (?role ?v ?x)) 
+(modifiers post verb ? ?slots ?v (gap ?ext) (gap nil) ?mod-sem)) 
+
+21.9 XPs 
+All that remains in our grammar is the XP category. XPs are used in two ways: First, 
+a phrase can be extraposed, as in "In god we trust," where "in god" will be parsed as 
+an XP and then placed on the gap list until it can be taken off as an adjunct to "trust." 
+Second, a phrase can be a complement, as in "He wants to be a fireman" where the 
+infinitive phrase is a complement of "wants." 
+
+As it turns out, the amount of information that needs to appear in a gap list 
+is slightly different from the information that appears in a complement slot. For 
+example, one sense of the verb "want" has the following complement list: 
+
+((agt 1 (NP ?x)) (con 3 (VP infinitive ?x))) 
+
+This says that the first complement (the subject) is a noun phrase that serves as the 
+agent of the wanting, and the second is an infinitive verb phrase that is the concept of 
+
+
+<a id='page-728'></a>
+
+the wanting. The subject of this verb phrase is the same as the subject of the wanting, 
+so in "She wants to go home," it is she who both wants and goes. (Contrast this to 
+"He persuaded her to go home," where it is he that persuades, but she that goes.) 
+
+But when we put a noun phrase on a gap list, we need to include its number and 
+case as well as the fact that it is an NP and its metavariable, but we don't need to 
+include the fact that it is an agent. This difference means we have two choices: either 
+we can merge the notions of slots and gap lists so that they use a common notation 
+containing all the information that either can use, or we need some way of mapping 
+between them. I made the second choice, on the grounds that each notation was 
+complicated enough without bringing in additional information. 
+
+The relation slot-constituent maps between the slot notation used for complements 
+and the constituent notation used in gap lists. There are eight types of 
+complements, five of which can appear in gap lists: noun phrases, clauses, prepositional 
+phrases, the word "it" (as in "it is raining"), and adverbial phrases. The three 
+phrases that are allowed only as complements are verb phrases, particles (such as 
+"up" in "look up the number"), and adjectives. Here is the mapping between the two 
+notations. The *** indicates no mapping: 
+
+(<- (slot-constituent (?role ?n (NP ?x)) 
+(NP ?agr ?case ?x) ?x ?h)) 
+(<- (slot-constituent (?role ?n (clause ?word ?infl)) 
+(clause ?word ?infl ?v) ?v ?h)) 
+(<- (slot-constituent (?role ?n (PP ?prep ?np)) 
+
+(PP ?prep ?role ?np ?h) ?np ?h)) 
+(<- (slot-constituent (?role ?n it) (it ? ? ?x) ?x ?)) 
+(<- (slot-constituent (manner 3 (advp ?x)) (advp ?v) ? ?v)) 
+(<- (slot-constituent (?role ?n (VP ?infl ?x)) *** ? ?)) 
+(<- (slot-constituent (?role ?n (Adj ?x)) *** ?x ?)) 
+(<- (slot-constituent (?role ?n (P ?particle)) *** ? ?)) 
+
+We are now ready to define compi ement. It takes a slot descrption, maps it into a 
+constituent, and then calls XP to parse that constituent: 
+
+(rule (complement ?cat ?info (?role ?n ?xp) ?h ?gapl ?gap2 :sem) 
+
+;; A complement is anything expected by a slot 
+(:sem (?role ?h ?x)) 
+(itest (slot-constituent (?role ?n ?xp) ?constituent ?x ?h)) 
+(XP ?xp ?constituent ?wh ?x ?gapl ?gap2 ?sem)) 
+
+The category XP takes seven arguments. The first two are the slot we are trying 
+to fill and the constituent we need to fill it. The third is used for any additional 
+information, and the fourth is the metavariable for the phrase. The last three supply 
+gap and semantic information. 
+
+
+<a id='page-729'></a>
+
+Here are the first five XP categories: 
+
+(rule (XP (PP ?prep ?np) (PP ?prep ?role ?np ?h) ?wh ?np 
+?gapl ?gap2 ?sem) ==> 
+(PP ?prep ?role ?wh ?np ?h ?gapl ?gap2 ?sem)) 
+
+(rule (XP (NP ?x) (NP ?agr ?case ?x) ?wh ?x ?gapl ?gap2 ?sem) ==> 
+(NP ?agr ?case ?wh ?x ?gapl ?gap2 ?sem)) 
+
+(rule (XP it (it ? ? ?x) -wh ?x ?gap ?gap t) ==> 
+(:word it)) 
+
+(rule (XP (clause ?word ?infl) (clause ?word ?infl ?v) -wh ?v 
+
+?gapl ?gap2 ?sem) ==> 
+(:ex (he thinks) "that she is tall") 
+(opt-word ?word) 
+
+(clause ?infl ?x int-subj ?v ?gapl ?gap2 ?sem)) 
+
+(rule (XP (?role ?n (advp ?v)) (advp ?v) ?wh ?v ?gapl ?gap2 ?sem) 
+
+(advp ?wh ?v ?gapl ?gap2 ?sem)) 
+
+The category opt-word parses a word, which may be optional. For example, one 
+
+sense of "know" subcategorizes for a clause with an optional "that": we can say 
+
+either "I know that he's here" or "I know he's here." The complement hst for "know" 
+
+thuscontains the slot (con 2 (clause (that) (finite ? ?))). If the "that" had 
+
+been obligatory, it would not have parentheses around it. 
+
+(rule (opt-word ?word) ==> (:word ?word)) 
+(rule (opt-word (?word)) ==> (iword ?word)) 
+(rule (opt-word (?word)) ==>) 
+
+Finally, here are the three XPs that can not be extraposed: 
+
+(rule (XP (VP ?infl ?x) *** -wh ?v ?gapl ?gap2 ?sem) ==> 
+(:ex (he promised her) "to sleep") 
+(VP ?infl ?x ?subj-slot ?v ?gapl ?gap2 ?sem)) 
+
+(rule (XP (Adj ?x) *** -wh ?x ?gap ?gap ?sem) ==> 
+(Adj ?x ?sem)) 
+
+(rule (XP (P ?particle) *** -wh ?x ?gap ?gap t) ==> 
+(prep ?particle t)) 
+
+
+<a id='page-730'></a>
+
+21.10 Word Categories 
+Each word category has a rule that looks words up in the lexicon and assigns the right 
+features. The relation word is used for all lexicon access. We will describe the most 
+complicated word class, verb, and just list the others. 
+
+Verbs are complex because they often are polysemous - they have many meanings. 
+In addition, each meaning can have several different complement lists. Thus, an 
+entry for a verb in the lexicon will consist of the verb form, its inflection, and a list 
+of senses, where each sense is a semantics followed by a list of possible complement 
+lists. Here is the entry for the verb "sees," indicating that it is a present-tense verb with 
+three senses. The understand sense has two complement lists, which correspond to 
+"He sees" and "He sees that you are right." The 100 k sense has one complement list 
+corresponding to "He sees the picture," and the dati ng sense, corresponding to "He 
+sees her (only on Friday nights)," has the same complement list. 
+
+> (?- (word sees verb ?infl ?senses)) 
+?INFL = (FINITE (--+-) PRESENT) 
+7SENSES = ((UNDERSTAND ((AGT 1 (NP ?3))) 
+
+((EXP 1 (NP ?4)) 
+
+(CON 2 (CLAUSE (THAT) (FINITE ?5 ?6))))) 
+(LOOK ((AGT 1 (NP 17)) (OBJ 2 (NP ?8)))) 
+(DATING ((AGT 1 (NP ?9)) (OBJ 2 (NP ?10))))) 
+
+The category verb takes five arguments: the verb itself, its inflection, its complement 
+list, its metavariable, and its semantics. The member relations are used to pick a sense 
+from the list of senses and a complement Hst from the list of lists, and the semantics 
+is built from semantic predicate for the chosen sense and the metavariable for the 
+verb: 
+
+(rule (verb ?verb ?infl ?slots ?v :sem) ==> 
+(:word ?verb) 
+(:test (word ?verb verb ?infl ?senses) 
+
+(member (?sem . ?subcats) ?senses) 
+(member ?slots ?subcats) 
+(tense-sem ?infl ?v ?tense-sem)) 
+
+(:sem ?tense-sem) 
+(:sem (?sem ?v))) 
+
+It is difficulty to know how to translate tense information into a semantic interpretation. 
+Different applications will have different models of time and thus will want 
+different interpretations. The relation tense-sem gives semantics for each tense. 
+Here is a very simple definition of tense-sem: 
+
+
+<a id='page-731'></a>
+(<- (tense-sem (finite ? ?tense) ?v (?tense ?Y))) 
+(<- (tense-sem -ing ?v (progressive ?v))) 
+(<- (tense-sem -en ?v (past-participle ?v))) 
+(<- (tense-sem infinitive ?v t)) 
+(<- (tense-sem nonfinite ?v t)) 
+(<- (tense-sem passive ?v (passive ?v))) 
+
+Auxiliary verbs and modal verbs are listed separately: 
+
+(rule (aux ?infl ?needs-infl ?v ?tense-sem) ==> 
+(:word ?aux) 
+(itest (word ?aux aux ?infl ?needs-infl) 
+
+(tense-sem ?infl ?v ?tense-sem))) 
+
+(rule (aux (finite ?agr ?tense) nonfinite ?v (?sem ?v)) ==> 
+(:word ?modal) 
+(:test (word ?modal modal ?sem ?tense))) 
+
+Nouns, pronouns, and names are also listed separately, although they have much 
+in common. For pronouns we use quantifier wh or pro, depending on if it is a wh-
+pronoun or not. 
+
+(rule (noun ?agr ?slots ?x (?sem ?x)) ==> 
+(:word ?noun) 
+(:test (word ?noun noun ?agr ?slots ?sem))) 
+
+(rule (pronoun ?agr ?case ?wh ?x (?quant ?x (?sem ?x))) ==> 
+(rword ?pro) 
+(:test (word ?pro pronoun ?agr ?case ?wh ?sem) 
+
+(if (= ?wh +wh) (= ?quant wh) (= ?quant pro)))) 
+
+(rule (name ?agr ?name) ==> 
+(iword ?name) 
+
+(:test (word ?name name ?agr))) 
+
+Here are the rules for the remaining word classes: 
+
+(rule (adj ?x (?sem ?x)) ==> 
+(:word ?adj) 
+(:test (word ?adj adj ?sem))) 
+
+(rule (adj ?x ((nth ?n) ?x)) ==> (ordinal ?n)) 
+
+(rule (art ?agr ?quant) ==> 
+(:word ?art) 
+(:test (word ?art art ?agr ?quant))) 
+
+
+<a id='page-732'></a>
+
+(rule (prep ?prep t) ==> 
+(:word ?prep) 
+(:test (word ?prep prep))) 
+
+(rule (adverb ?wh ?x ?sem) ==> 
+(rword ?adv) 
+(:test (word ?adv adv ?wh ?pred) 
+
+(if (= ?wh +wh) 
+(= ?sem (wh ?y (?pred ?x ?y))) 
+(= ?sem (?pred ?x))))) 
+
+(rule (cardinal ?n ?agr) ==> 
+(:ex "five") 
+(rword ?num) 
+(rtest (word ?nuni cardinal ?n ?agr))) 
+
+(rule (cardinal ?n ?agr) ==> 
+(rex "5") 
+(rword ?n) 
+(rtest (numberp ?n) 
+
+(if (= ?n 1) 
+(= ?agr (-- + -)) ;3sing 
+(= ?agr ( +))))) ;3plur 
+
+(rule (ordinal ?n) ==> 
+(rex "fifth") 
+(rword ?num) 
+(rtest (word ?num ordinal ?n))) 
+
+21.11 The Lexicon 
+The lexicon itself consists of a large number of entries in the word relation, and it 
+would certainly be possible to ask the lexicon writer to make a long list of word facts. 
+But to make the lexicon easier to read and write, we adopt three useful tools. First, 
+we introduce a system of abbreviations. Common expressions can be abbreviated 
+with a symbol that will be expanded by word. Second, we provide the macros verb 
+and noun to cover the two most complex word classes. Third, we provide a macro 
+word that makes entries into a hash table. This is more efficient than compiling a 
+word relation consisting of hundreds of Prolog clauses. 
+
+The implementation of these tools is left for the next section; here we show the 
+actual lexicon, starting with the list of abbreviations. 
+
+The first set of abbreviations defines the agreement features. The obvious way to 
+handle agreement is with two features, one for person and one for number. So first-
+person singular might be represented (1 si ng). A problem arises when we want 
+
+
+<a id='page-733'></a>
+
+to describe verbs. Every verb except "be" makes the distinction only between third-
+person singular and all the others. We don't want to make five separate entries in the 
+lexicon to represent all the others. One alternative is to have the agreement feature be 
+a set of possible values, so all the others would be a single set of five values rather than 
+five separate values. This makes a big difference in cutting down on backtracking. 
+The problem with this approach is keeping track of when to intersect sets. Another 
+approach is to make the agreement feature be a list of four binary features, one each 
+for first-person singular, first-person plural, third-person singular, and third-person 
+plural. Then "all the others" can be represented by the list that is negative in the third 
+feature and unknown in all the others. There is no way to distinguish second-person 
+singular from plural in this scheme, but English does not make that distinction. Here 
+are the necessary abbreviations: 
+
+(abbrev Ising (+---)) 
+(abbrev Iplur (-+ - -)) 
+(abbrev 3sing (--+-)) 
+(abbrev Splur (---+)) 
+(abbrev 2pers (--- -)) 
+(abbrev ~3sing (??-?)) 
+
+The next step is to provide abbreviations for some of the common verb complement 
+lists: 
+
+(abbrev v/intrans ((agt 1 (NP ?)))) 
+(abbrev v/trans ((agt 1 (NP ?)) (obj 2 (NP ?)))) 
+(abbrev v/ditrans ((agt 1 (NP ?)) (goal 2 (NP ?)) (obj 3 (NP ?)))) 
+(abbrev v/trans2 ((agt 1 (NP ?)) (obj 2 (NP ?)) (goal 2 (PP to ?)))) 
+(abbrev v/trans4 ((agt 1 (NP ?)) (obj 2 (NP ?)) (ben 2 (PP for ?)))) 
+(abbrev v/it-null ((nil 1 it))) 
+(abbrev v/opt-that ((exp 1 (NP ?)) (con 2 (clause (that) (finite ? ?))))) 
+(abbrev v/subj-that ((con 1 (clause that (finite ? ?))) (exp 2 (NP ?)))) 
+(abbrev v/it-that ((nil 1 it) (exp 2 (NP ?)) 
+
+(con 3 (clause that (finite ? ?))))) 
+(abbrev v/inf ((agt 1 (NP ?x)) (con 3 (VP infinitive ?x)))) 
+(abbrev v/promise ((agt 1 (NP ?x)) (goal (2) (NP ?y)) 
+
+(con 3 (VP infinitive ?x)))) 
+(abbrev v/persuade ((agt 1 (NP ?x)) (goal 2 (NP ?y)) 
+
+(con 3 (VP infinitive ?y)))) 
+(abbrev v/want ((agt 1 (NP ?x)) (con 3 (VP infinitive ?x)))) 
+(abbrev v/p-up ((agt 1 (NP ?)) (pat 2 (NP ?)) (nil 3 (P up)))) 
+(abbrev v/pp-for ((agt 1 (NP ?)) (pat 2 (PP for ?)))) 
+(abbrev v/pp-after ((agt 1 (NP ?)) (pat 2 (PP after ?)))) 
+
+
+<a id='page-734'></a>
+
+Verbs 
+
+The macro verb allows us to list verbs in the form below, where the spellings of each 
+tense can be omitted if the verb is regular: 
+
+(verb (base past-tense past-participle present-participle present-plural) 
+{semantics complement-list,..) ...) 
+
+For example, in the following list "ask" is regular, so only its base-form spelling is 
+necessary. "Do," on the other hand, is irregular, so each form is spelled out. The 
+haphazard list includes verbs that are either useful for examples or illustrate some 
+unusual complement list. 
+
+(verb (ask) (query v/ditrans)) 
+(verb (delete) (delete v/trans)) 
+(verb (do did done doing does) (perform v/trans)) 
+(verb (eat ate eaten) (eat v/trans)) 
+(verb (give gave given giving) (give-1 v/trans2 v/ditrans) 
+
+(donate v/trans v/intrans)) 
+(verb (go went gone going goes)) 
+(verb (have had had having has) (possess v/trans)) 
+(verb (know knew known) (know-that v/opt-that) (know-of v/trans)) 
+(verb (like) (like-1 v/trans)) 
+(verb (look) (look-up v/p-up) (search v/pp-for) 
+
+(take-care v/pp-after) (look v/intrans)) 
+(verb (move moved moved moving moves) 
+
+(self-propel v/intrans) (transfer v/trans2)) 
+(verb (persuade) (persuade v/persuade)) 
+(verb (promise) (promise v/promise)) 
+(verb (put put put putting)) 
+(verb (rain) (rain v/it-nulD) 
+(verb (saw) (cut-with-saw v/trans v/intrans)) 
+(verb (see saw seen seeing) (understand v/intrans v/opt-that) 
+
+(look v/trans)(dating v/trans)) 
+(verb (sleep slept) (sleep v/intrans)) 
+(verb (surprise) (surprise v/subj-that v/it-that)) 
+(verb (tell told) (tell v/persuade)) 
+(verb (trust) (trust v/trans ((agt 1 (NP ?)) (obj 2 (PP in ?))))) 
+(verb (try tried tried trying tries) (attempt v/inf)) 
+(verb (visit) (visit v/trans)) 
+(verb (want) (desire v/want v/persuade)) 
+
+
+<a id='page-735'></a>
+
+Auxiliary Verbs 
+
+Auxiliary verbs are simple enough to be described directly with the word macro. Each 
+entry lists the auxiliary itself, the tense it is used to construct, and the tense it must 
+be followed by. The auxiliaries "have" and "do" are listed, along with "to," which is 
+used to construct infinitive clauses and thus can be treated as if it were an auxiliary. 
+
+(word have aux nonfinite -en) 
+(word have aux (finite ~3sing present) -en) 
+(word has aux (finite 3sing present) -en) 
+(word had aux (finite ? past) -en) 
+(word having aux -ing -en) 
+
+(word do aux (finite ~3sing present) nonfinite) 
+(word does aux (finite 3sing present) nonfinite) 
+(word did aux (finite ? past) nonfinite) 
+
+(word to aux infinitive nonfinite) 
+
+The auxiliary "be" is special: in addition to its use as both an auxiliary and main 
+verb, it also is used in passives and as the main verb in aux-inverted sentences. The 
+function copul a is used to keep track of all these uses. It will be defined in the next 
+section, but you can see it takes two arguments, a list of senses for the main verb, and 
+a list of entries for the auxiliary verb. The three senses correspond to the examples 
+"He is a fool," "He is a Republican," and "He is in Indiana," respectively. 
+
+(copula 
+
+'((nil ((nil 1 (NP ?x)) (nil 2 (Adj ?x)))) 
+(is-a ((exp 1 (NP ?x)) (arg2 2 (NP ?y)))) 
+(is-loc ((exp 1 (NP ?x)) (?prep 2 (PP ?prep ?))))) 
+
+'((be nonfinite -ing) 
+(been -en -ing) 
+(being -ing -en) 
+(am (finite Ising present) -ing) 
+(is (finite 3sing present) -ing) 
+(are (finite 2pers present) -ing) 
+(were (finite (--??) past) -ing) ; 2nd sing or pi 
+(was (finite (?-?-) past) -ing))) ; 1st or 3rd sing 
+
+Following are the modal auxiliary verbs. Again, it is difficult to specify semantics 
+for them. The word "not" is also listed here; it is not an auxiliary, but it does modify 
+them. 
+
+
+<a id='page-736'></a>
+
+(word can modal able past) 
+(word could modal able present) 
+(word may modal possible past) 
+(word might modal possible present) 
+(word shall modal mandatory past) 
+(word should modal mandatory present) 
+(word will modal expected past) 
+(word would modal expected present) 
+(word must modal necessary present) 
+
+(word not not) 
+
+Nouns 
+
+No attempt has been made to treat nouns seriously. We list enough nouns here to 
+make some of the examples work. The first noun shows a complement list that is 
+sufficient to parse "the destruction of the city by the enemy." 
+
+(noun destruction * destruction 
+
+(pat (2) (PP of ?)) (agt (2) (PP by ?))) 
+(noun beach) 
+(noun bone) 
+(noun box boxes) 
+(noun city cities) 
+(noun color) 
+(noun cube) 
+(noun doctor) 
+(noun dog dogs) 
+(noun enemy enemies) 
+(noun file) 
+(noun friend friends friend (friend-of (2) (PP of ?))) 
+(noun furniture *) 
+(noun hat) 
+(noun man men) 
+(noun saw) 
+(noun woman women) 
+
+Pronouns 
+
+Here we list the nominative, objective, and genitive pronouns, followed by interrogative 
+and relative pronouns. The only thing missing are reflexive pronouns, such as 
+"myself." 
+
+
+<a id='page-737'></a>
+

@@ -1,0 +1,5968 @@
+clauses, where the syntax of each clause is determined by the first expression of the 
+clause, which should be a known symbol. These symbols are called loop keywords, 
+although they are not in the keyword package. 
+
+The loop keywords will be defined in a data-driven fashion. Every keyword has 
+a function on its property list under the 1 oop-f . indicator. The function takes three 
+arguments: the 1 oop structure being built, the very next expression in the loop body, 
+and a hst of the remaining expressions after that. The function is responsible for updating 
+the 1 oop structure (usually by making appropriate calls to the add - functions) 
+and then returning the unparsed expressions. The three-argument calling convention 
+is used because many of the keywords only look at one more expression. So 
+those functions see that expression as their first argument, and they can conveniently 
+return their second argument as the unparsed remainder. Other functions will want 
+to look more carefully at the second argument, parsing some of it and returning 
+the rest. 
+
+The macro def 1 oop is provided to add new loop keywords. This macro enforces 
+the three-argument calling convention. If the user supplies only two arguments, then 
+a third argument is automatically added and returned as the remainder. Also, if the 
+user specifies another symbol rather than a list of arguments, this is taken as an alias, 
+and a function is constructed that calls the function for that keyword: 
+
+(defun parse-loop-body (1 exps) 
+"Parse the exps based on the first exp being a keyword. 
+Continue until all the exps are parsed." 
+(unless (null exps) 
+
+(parse-loop-body 
+1 (call-loop-fn 1 (first exps) (rest exps))))) 
+
+(defun call-loop-fn (1 key exps) 
+"Return the loop parsing function for this keyword." 
+(if (and (symbolp key) (get key ....-fn)) 
+
+(funcall (get key ....-fn) 1 (first exps) (rest exps)) 
+(error "Unknown loop key: ~a" key))) 
+
+(defmacro defloop (key args &rest body) 
+"Define a new LOOP keyword." 
+;; If the args do not have a third arg. one is supplied. 
+
+Also, we can define an alias with (defloop key other-key) 
+'(setf (get '.key ....-fn) 
+.(cond ((and (symbolp args) (null body)) 
+'#'(lambda (1 . y) 
+(call-loop-fn 1 '.args (cons . y)))) 
+((and (listp args) (= (length args) 2)) 
+*#'(lambda (.@args -exps-) .@body -exps-)) 
+(t '#'(lambda .args .body))))) 
+
+Now we are ready to define some 1 oop keywords. Each of the following sections 
+
+
+<a id='page-845'></a>
+refers to (and implements the loop keywords in) a section of chapter 26 of Common 
+Lisp the Language, 2d edition. 
+
+Iteration Control (26.6) 
+
+Here we define keywords for iterating over elements of a sequence and for stopping 
+the iteration. The following cases are covered, where uppercase words represent 
+loop keywords: 
+
+(LOOP REPEAT . ...) 
+
+(LOOP FOR i FROM s TO e BY inc ...) 
+
+(LOOP FOR V IN 1 ...) 
+
+(LOOP FOR V ON1 ...) 
+
+(LOOP FOR V = expr [THEN step] ...) 
+
+The implementation is straightforward, although somewhat tedious for complex 
+keywords like for. Take the simpler keyword, repeat. To handle it, we generate a 
+new variable that will count down the number of times to repeat. We call add - va r to 
+add that variable, with its initial value, to the loop structure. We also give this variable 
+an update expression, which decrements the variable by one each time through the 
+loop. Then all we need to do is call add-test to insert code that will exit the loop 
+when the variable reaches zero: 
+
+(defloop repeat (1 times) 
+"(LOOP REPEAT . ...) does loop body . times." 
+(let ((i (gensym "REPEAT"))) 
+
+(add-var 1 i times *(-J D) 
+
+(add-test 1 '(<= ,i 0)))) 
+
+The loop keyword for is more compUcated, but each case can be analyzed in the 
+same way as repeat: 
+
+(defloop as for) ;; AS is the same as FOR 
+
+(defloop for (1 var exps) 
+"4 of the 7 cases for FOR are covered here: 
+(LOOP FOR i FROM s TO e BY inc ...) does arithemtic iteration 
+(LOOP FOR V IN 1 ...) iterates for each element of 1 
+(LOOP FOR V ON1 ...) iterates for each tail of 1 
+(LOOP FOR V = expr [THEN step]) initializes and iterates v" 
+(let ((key (first exps)) 
+
+(source (second exps)) 
+(rest (rest2 exps))) 
+(ecase key 
+
+
+<a id='page-846'></a>
+
+((from downfrom upfrom to downto upto by) 
+(loop-for-arithmetic 1 var exps)) 
+
+(in (let ((V (gensym "IN"))) 
+(add-var 1 . source *(cdr .v)) 
+(add-var 1 var '(car ,v) '(car ,v)) 
+(add-test 1 '(null ,v)) 
+rest)) 
+
+(on (add-var 1 var source '(cdr .var)) 
+(add-test 1 '(null .var)) 
+rest) 
+
+(= (if (eq (first rest) 'then) 
+
+(progn 
+(pop rest) 
+(add-var 1 var source (pop rest))) 
+
+(progn 
+(add-var 1 var nil) 
+(add-body 1 '(setq .var .source)))) 
+
+rest) 
+;; ACROSS. BEING clauses omitted 
+))) 
+
+(defun loop-for-arithmetic (1 var exps) 
+"Parse loop expressions of the form: 
+(LOOP FOR var [FROMIDOWNFROMIUPFROM expl] [TOIDOWNTOIUPTO exp2] 
+[BY exp3]" 
+;; The prepositions BELOW and ABOVE are omitted 
+(let ((expl 0) 
+(exp2 nil) 
+(exp3 1) 
+(down? nil)) 
+Parse the keywords: 
+(when (member (first exps) '(from downfrom upfrom)) 
+(setf expl (second exps) 
+down? (eq (first exps) 'downfrom) 
+exps (rest2 exps))) 
+(when (member (first exps) '(to downto upto)) 
+(setf exp2 (second exps) 
+down? (or down? (eq (first exps) 'downto)) 
+exps (rest2 exps))) 
+(when (eq (first exps) 'by) 
+(setf exp3 (second exps) 
+exps (rest2 exps))) 
+;; Add variables and tests: 
+(add-var 1 var expl 
+'(.(if down? '- '+) .var .(maybe-temp 1 exp3))) 
+(when exp2 
+(add-test 1 '(.(if down? '< '>) .var .(maybe-temp 1 exp2)))) 
+and return the remaining expressions: 
+
+
+<a id='page-847'></a>
+exps)) 
+
+(defun maybe-temp (1 exp) 
+"Generate a temporary variable, if needed." 
+(if (constantp exp) 
+
+exp 
+
+(let ((temp (gensym "TEMP"))) 
+(add-var 1 temp exp) 
+temp))) 
+
+End-Test Control (26.7) 
+
+In this section we cover the following clauses: 
+
+(LOOP UNTIL test ...) 
+
+(LOOP WHILE test ...) 
+
+(LOOP ALWAYS condition ...) 
+
+(LOOP NEVER condition ...) 
+
+(LOOP THEREIS condition ...) 
+
+(LOOP ... (LOOP-FINISH) ...) 
+
+Each keyword is quite simple: 
+
+(defloop until (1 test) (add-test 1 test)) 
+
+(defloop while (1 test) (add-test 1 '(not ,test))) 
+
+(defloop always (1 test) 
+(setf (loop-result 1) t) 
+(add-body 1 '(if (not ,test) (return nil)))) 
+
+(defloop never (1 test) 
+(setf (loop-result 1) t) 
+(add-body 1 '(if ,test (return nil)))) 
+
+(defloop thereis (1 test) (add-body 1 '(return-if ,test))) 
+
+(defmacro return-if (test) 
+"Return TEST if it is non-nil." 
+(once-only (test) 
+
+'(if ,test (return ,test)))) 
+
+(defmacro loop-finish () '(go end)) 
+
+
+<a id='page-848'></a>
+
+Value Accumulation (26.8) 
+
+The col 1 ect keyword poses another challenge. How do you collect a list of expressions 
+presented one at a time? The answer is to view the expressions as a queue, one 
+where we add items to the rear but never remove them from the front of the queue. 
+Then we can use the queue functions defined in section 10.5. 
+
+Unlike the other clauses, value accumulation clauses can communicate with each 
+other. There can be, say, two col 1 ect and an append clause in the same loop, and 
+they all build onto the same list. Because of this, I use the same variable name for the 
+accumulator, rather than gensyming a new variable for each use. The name chosen 
+is stored in the global variable *acc*. In the official 1 oop standard it is possible for 
+the user to specify the variable with an i nto modifier, but I have not implemented 
+that option. The clauses covered are: 
+
+(LOOP COLLECT item ...) 
+(LOOP NCONC item ...) 
+(LOOP APPEND item ...) 
+(LOOP COUNT item ...) 
+(LOOP SUM item ...) 
+(LOOP MAXIMIZE item ...) 
+(LOOP MINIMIZE item ...) 
+
+The implementation is: 
+
+(defconstant *acc* (gensym "ACC") 
+"Variable used for value accumulation in LOOP.") 
+
+;;; INTO preposition is omitted 
+
+(defloop collect (1 exp) 
+(add-var 1 *acc* *(make-queue)) 
+(add-body 1 '(enqueue ,exp ,*acc*)) 
+(setf (loop-result 1) '(queue-contents ,*acc*))) 
+
+(defloop nconc (1 exp) 
+(add-var 1 *acc* '(make-queue)) 
+(add-body 1 '(queue-nconc ,*acc* .exp)) 
+(setf (loop-result 1) '(queue-contents ,*acc*))) 
+
+(defloop append (1 exp exps) 
+(call-loop-fn 1 'nconc '((copy-list .exp) ..exps))) 
+
+(defloop count (1 exp) 
+(add-var 1 *acc* 0) 
+(add-body 1 '(when ,exp (incf ,*acc*))) 
+(setf (loop-result 1) *acc*)) 
+
+
+<a id='page-849'></a>
+(defloop sum (1 exp) 
+(add-var 1 *acc* 0) 
+(add-body 1 '(incf ,*acc* .exp)) 
+(setf (loop-result 1) *acc*)) 
+
+(defloop maximize (1 exp) 
+(add-var 1 *acc* nil) 
+(add-body 1 '(setf ,*acc* 
+
+(if ,*acc* 
+(max .*acc* ,exp) 
+.exp))) 
+
+(setf (loop-result 1) *acc*)) 
+
+(defloop minimize (1 exp) 
+(add-var 1 *acc* nil) 
+(add-body 1 '(setf ,*acc* 
+
+(if .*acc* 
+(min .*acc* ,exp) 
+.exp))) 
+
+(setf (loop-result 1) *acc*)) 
+
+(defloop collecting collect) 
+
+(defloop nconcing nconc) 
+
+(defloop appending append) 
+
+(defloop counting count) 
+
+(defloo sum)
+
+(derIoop
+pp summin 
+summinsumming
+gg sum; 
+
+(defloop maximizing maximize) 
+
+(defloop minimizing minimize) 
+
+&#9635; Exercise 24.1 1 ooplets us buildaggregates (lists, maximums, sums, etc.)over the 
+bodyofthe loop. Sometimes itis inconvenientto be restrictedto a single-loop body. 
+For example, we mightwant a list ofallthe nonzero elements ofa two-dimensional 
+array. One waytoimplementthisiswitha macro, with-col1 ecti on,thatsets up and 
+returns a queue structure thatis builtbycalls to the function col1 ect. For example: 
+
+> (let ((A '#2a((l 0 0) (0 2 4) (0 0 3)))) 
+(with-collection 
+(loop for i from 0 to 2 do 
+(loop for j from 0 to 2 do 
+(if (> (aref a i j) 0) 
+(collect (aref A i j))))))) 
+(12 4 3) 
+
+Implementwith-col1 ecti onand col1 ect. 
+
+
+<a id='page-850'></a>
+
+Variable Initialization (26.9) 
+
+The with clause allows local variables - I have included it, but recommend using a 
+let instead. I have not included the and preposition, which allows the variables to 
+nest at different levels. 
+
+26.9. Variable Initializations ("and" omitted) 
+(defloop with (1 var exps) 
+(let ((init nil)) 
+(when (eq (first exps) '=) 
+(setf init (second exps) 
+
+exps (rest2 exps))) 
+(add-var 1 var init) 
+exps)) 
+
+Conditional Execution (2610) 
+
+1 oop also provides forms for conditional execution. These should be avoided whenever 
+possible, as Lisp already has a set of perfectly good conditional macros. However, 
+sometimes you want to make, say, a col 1 ect conditional on some test. In that 
+case, loop conditionals are acceptable. The clauses covered here are: 
+
+(LOOP WHEN test ... [ELSE ...]) ; I Pis a synonym for WHEN 
+(LOOP UNLESS test ... [ELSE ...]) 
+
+Here is an example of when: 
+
+> (loop for X from 1 to 10 
+when (oddp x) 
+collect X 
+else collect (- x)) 
+(1 -23-45-67-89 -10) 
+
+Of course, we could have said coll ect (if (oddp x) . (- .)) and done without 
+the conditional. There is one extra feature in loop's conditionals: the value of the test 
+is stored in the variable i t for subsequent use in the THEN or ELSE parts. (This is 
+just the kind of feature that makes some people love 1 oop and others throw up their 
+hands in despair.) Here is an example: 
+
+
+<a id='page-851'></a>
+
+> (loop for X from 1 to 10 
+when (second (assoc . '((1 one) (3 three) (5five)))) 
+collect it) 
+
+(ONE THREE FIVE) 
+
+The conditional clauses are a little tricky to implement, since they involve parsing 
+other clauses. The idea is that cal 1 -1 oop-f. parses the THEN and ELSE parts, 
+adding whatever is necessary to the body and to other parts of the loop structure. 
+Then add-body is used to add labels and go statements that branch to the labels as 
+needed. This is the same technique that is used to compile conditionals in chapter 23; 
+see the function comp - i f on [page 787](chapter23.md#page-787). Here is the code: 
+
+(defloop when (1 test exps) 
+(loop-unless 1 '(not ,(maybe-set-it test exps)) exps)) 
+
+(defloop unless (1 test exps) 
+(loop-unless 1 (maybe-set-it test exps) exps)) 
+
+(defun maybe-set-it (test exps) 
+"Return value, but if the variable IT appears in exps, 
+then return code that sets IT to value." 
+(if (find-anywhere 'it exps) 
+
+'(setq it ,test) 
+
+test)) 
+
+(defloop if when) 
+
+(defun loop-unless (1 test exps) 
+(let ((label (gensym "L"))) 
+(add-var 1 'it nil) 
+
+Emit code for the test and the THEN part 
+(add-body 1 '(if ,test (go ,label))) 
+(setf exps (call-loop-fn 1 (first exps) (rest exps))) 
+;; Optionally emit code for the ELSE part 
+(if (eq (first exps) 'else) 
+
+(progn 
+
+(let ((label2 (gensym "L"))) 
+(add-body 1 '(go ,label2)) 
+(add-body 1 label) 
+(setf exps (call-loop-fn 1 (second exps) (rest2 exps))) 
+(add-body 1 label2))) 
+
+(add-body 1 label))) 
+exps) 
+
+
+<a id='page-852'></a>
+
+Unconditional Execution (26.11) 
+
+The unconditional execution keywords are do and return: 
+
+(defloop do (1 exp exps) 
+(add-body 1 exp) 
+(loop (if (symbolp (first exps)) (RETURN exps)) 
+
+(add-body 1 (pop exps)))) 
+
+(defloop return (1 exp) (add-body 1 '(return ,exp))) 
+
+Miscellaneous Features (26.12) 
+
+Finally, the miscellaneous features include the keywords initially and finally, 
+which define the loop prologue and epilogue, and the keyword named, which gives 
+a name to the loop for use by a return-from form. I have omitted the data-type 
+declarations and destructuring capabilities. 
+
+(defloop initially (1 exp exps) 
+(push exp (loop-prologue 1)) 
+(loop (if (symbolp (first exps)) (RETURN exps)) 
+
+(push (pop exps) (loop-prologue 1)))) 
+
+(defloop finally (1 exp exps) 
+(push exp (loop-epilogue 1)) 
+(loop (if (symbolp (first exps)) (RETURN exps)) 
+
+(push (pop exps) (loop-epilogue 1)))) 
+
+(defloop named (1 exp) (setf (loop-name 1) exp)) 
+
+24.6 Sequence Functions 
+Common Lisp provides sequence functions to make the programmer's life easier: 
+the same function can be used for lists, vectors, and strings. However, this ease of 
+use comes at a cost. Sequence functions must be written very carefully to make sure 
+they are efficient. There are three main sources of indeterminacy that can lead to 
+inefficiency: (1) the sequences can be of different types; (2) some functions have 
+keyword arguments; (3) some functions have a &rest argument. Careful coding 
+can limit or eliminate these sources of inefficiency, by making as many choices as 
+possible at compile time and making the remaining choices outside of the main loop. 
+
+
+<a id='page-853'></a>
+In this section we see how to implement the new ANSI sequence function 
+map-into and the updated function reduce efficiently. This is essential for those 
+without an ANSI compiler. Even those who do have access to an ANSI compiler will 
+benefit from seeing the efficiency techniques used here. 
+
+Before defining the sequence functions, the macro once - onl y is introduced. 
+
+Once-only: A Lesson in Macrology 
+
+The macro once - onl y has been around for a long time on various systems, although 
+it didn't make it into the Common Lisp standard. I include it here for two reasons: 
+first, it is used in the following funcall - i f macro, and second, if you can understand 
+how to write and when to use once-only, then you truly understand macro. 
+
+First, you have to understand the problem that once-only addresses. Suppose 
+we wanted to have a macro that multiplies its input by itself:^ 
+
+(defmacro square (x) *(* .x ,x)) 
+
+This definition works fine in the following case: 
+
+> (macroexpand '(square z)) => (* . Z) 
+
+But it doesn't work as well here: 
+
+> (macroexpand '(square (print (incf i)))) 
+
+(* (PRINT (INCF I)) (PRINT (INCF I))) 
+
+The problem is that i will get incremented twice, not once, and two different values 
+will get printed, not one. We need to bind (print (incf i)) to a local variable before 
+doing the multiplication. On the other hand, it would be superfluous to bind . to a 
+local variable in the previous example. This is where once-onl y comes in. It allows 
+us to write macro definitions like this: 
+
+(defmacro square (x) (once-only (x) *(* ,x .x))) 
+
+and have the generated code be just what we want: 
+
+> (macroexpand '(square z)) 
+
+(* . .) 
+
+^As was noted before, the proper way to do this is to proclaim squa re as an inline function, 
+not a macro, but please bear with the example. 
+
+
+<a id='page-854'></a>
+
+> (macroexpand '(square (print (incf i)))) 
+(LET ((G3811 (PRINT (INCF I)))) 
+(* G3811 G3811)) 
+
+You have now learned lesson number one of once - on1 y: you know how macros differ 
+from functions when it comes to arguments with side effects, and you now know how 
+to handle this. Lesson number two comes when you try to write (or even understand) 
+a definition of once-only - only when you truly understand the nature of macros will 
+you be able to write a correct version. As always, the first thing to determine is what 
+a call to once-only should expand into. The generated code should test the variable 
+to see if it is free of side effects, and if so, generate the body as is; otherwise it should 
+generate code to bind a new variable, and use that variable in the body of the code. 
+Here's roughly what we want: 
+
+> (macroexpand '(once-only (x) *(* ,x .x))) 
+(if (side-effect-free-p x) 
+*(* .x .x) 
+
+'(let ((gOOl .x)) 
+.(let ((x 'gOOD) 
+'(* .x .X)))) 
+
+where gOOl is a new symbol, to avoid conflicts with the . or with symbols in the 
+body. Normally, we generate macro bodies using backquotes, but if the macro body 
+itself has a backquote, then what? It is possible to nest backquotes (and appendix C of 
+Common Lisp the Language, 2d edition has a nice discussion of doubly and triply nested 
+backquotes), but it certainly is not trivial to understand. I recommend replacing the 
+inner backquote with its equivalent using 1 i st and quote: 
+
+(if (side-effect-free-p x) 
+'(* .x .x) 
+(list 'let (list (list 'gOOl x)) 
+
+(let ((x 'gOOD) 
+'(* ,x .x)))) 
+
+Now we can write once - onl y. Note that we have to account for the case where there 
+is more than one variable and where there is more than one expression in the body. 
+
+(defmacro once-only (variables &rest body) 
+"Returns the code built by BODY. If any of VARIABLES 
+might have side effects, they are evaluated once and stored 
+in temporary variables that are then passed to BODY." 
+(assert (every #'symbolp variables)) 
+(let ((temps (loop repeat (length variables) collect (gensym)))) 
+
+'(if (every #'side-effect-free-p (list .,variables)) 
+
+
+<a id='page-855'></a>
+(progn ..body) 
+(list Met 
+.'(list .(mapcar #'(lambda (tmp var) 
+'(list '.tmp .var)) 
+temps variables)) 
+(let .(mapcar #'(lambda (var tmp) '(.var '.tmp)) 
+variables temps) 
+..body))))) 
+
+(defun side-effect-free-p (exp) 
+"Is exp a constant, variable, or function, 
+or of the form (THE type x) where . is side-effect-free?" 
+(or (constantp exp) (atom exp) (starts-with exp 'function) 
+
+(and (starts-with exp 'the) 
+(side-effect-free-p (third exp))))) 
+
+Here we see the expansion of the call to once - on1y and a repeat of the expansions of 
+two calls to square: 
+
+> (macroexpand '(once-only (x) '(* .x .x))) 
+(IF (EVERY #'SIDE-EFFECT-FREE-P (LIST X)) 
+(PROGN 
+'(* .X .X)) 
+(LIST 'LET (LIST (LIST 'G3763 X)) 
+(LET ((X 'G3763)) 
+'(* .X .X)))) 
+
+> (macroexpand '(square z)) 
+(* . .) 
+
+> (macroexpand '(square (print (incf i)))) 
+(LET ((G3811 (PRINT (INCF I)))) 
+(* G3811 G3811)) 
+
+This output was produced with *pri nt-gensym* set to ni 1. When this variable 
+is non-nil, uninterned symbols are printed with a prefix #:,asin #:G3811. This 
+insures that the symbol will not be interned by a subsequent read. 
+
+It is worth noting that Common Lisp automatically handles problems related to 
+multiple evaluation of subforms in setf methods. See [page 884](chapter25.md#page-884) for an example. 
+
+Avoid Overusing Macros 
+
+A word to the wise: don't get carried away with macros. Use macros freely to 
+represent your problem, but shy away from new macros in the implementation of 
+your solution, unless absolutely necessary. So, it is good style to introduce a macro. 
+
+
+<a id='page-856'></a>
+
+say, def rul e, which defines rules for your application, but adding macros to the 
+code itself may just make things harder for others to use. 
+
+Here is a story. Before i f was a standard part of Lisp, I defined my own version of 
+i f. Unlike the simple i f, my version took any number of test/result pairs, followed 
+by an optional el se result. In general, the expansion was: 
+
+(if abcd,.,x) => (cond iab) icd) ... iJx)) 
+
+My i f also had one more feature: the symbol 'that' could be used to refer to the value 
+of the most recent test. For example, I could write: 
+
+(if (assoc item a-list) 
+(process (cdr that))) 
+
+which would expand into: 
+
+(LET (THAT) 
+(COND 
+((SETQ THAT (ASSOC ITEM A-LIST)) (PROCESS (CDR THAT))))) 
+
+This was a convenient feature (compare it to the => feature of Scheme's cond, as 
+discussed on [page 778](chapter22.md#page-778)), but it backfired often enough that I eventually gave up on 
+my version of i f. Here's why. I would write code like this: 
+
+(if (total-score x) 
+(print (/ that number-of-trials)) 
+(error "No scores")) 
+
+and then make a small change: 
+
+(if (total-score x) 
+(if *print-scores* (print (/ that number-of-trials))) 
+(error "No scores")) 
+
+Theproblemis thatthevariablethatnowrefers to *print-scores*,not( total-score 
+x), as it did before. My macro violates referential transparency. In general, that's 
+the whole point of macros, and it is why macros are sometimes convenient. But in 
+this case, violating referential transparency can lead to confusion. 
+
+
+<a id='page-857'></a>
+MAP-INTO 
+
+The function map-i nto is used on [page 632](chapter18.md#page-632). This function, added for the ANSI 
+version of Common Lisp, is like map, except that instead of building a new sequence, 
+the first argument is changed to hold the results. This section describes how to write 
+a fairly efficient version of map-i nto, using techniques that are applicable to any 
+sequence function. We'll start with a simple version: 
+
+(defun map-into (result-sequence function &rest sequences) 
+"Destructively set elements of RESULT-SEQUENCE to the results 
+of applying FUNCTION to respective elements of SEQUENCES." 
+(replace result-sequence (apply #'map 'list function sequences))) 
+
+This does the job, but it defeats the purpose of ma . -i . to, which is to avoid generating 
+garbage. Here's a version that generates less garbage: 
+
+(defun map-into (result-sequence function &rest sequences) 
+"Destructively set elements of RESULT-SEQUENCE to the results 
+of applying FUNCTION to respective elements of SEQUENCES." 
+(let ((n (loop for seq in (cons result-sequence sequences) 
+
+minimize (length seq)))) 
+(dotimes (i n) 
+(setf (elt result-sequence i) 
+(apply function 
+(mapcar #*(lambda (seq) (elt seq i)) 
+sequences)))))) 
+
+There are three problems with this definition. First, it wastes space: mapcar creates 
+a new argument list each time, only to have the list be discarded. Second, it wastes 
+time: doing a setf of the ith element of a list makes the algorithm O(n^) instead of 
+0(n), where . is the length of the list. Third, it is subtly wrong: if result-sequence 
+is a vector with a fill pointer, then map -i nto is supposed to ignore res ul t - sequence's 
+current length and extend the fill pointer as needed. The following version fixes 
+those problems: 
+
+(defun map-into (result-sequence function &rest sequences) 
+"Destructively set elements of RESULT-SEQUENCE to the results 
+of applying FUNCTION to respective elements of SEQUENCES." 
+(let ((arglist (make-list (length sequences))) 
+
+(n (if (listp result-sequence) 
+most-positive-fixnum 
+(array-dimension result-sequence 0)))) 
+
+arglist is made into a list of args for each call 
+. is the length of the longest vector 
+
+
+<a id='page-858'></a>
+
+(when sequences 
+(setf . (min . (loop for seq in sequences 
+minimize (length seq))))) 
+Define some shared functions: 
+(flet 
+((do-one-call (i) 
+
+(loop for seq on sequences 
+for arg on arglist 
+do (if (listp (first seq)) 
+
+(setf (first arg) 
+(pop (first seq))) 
+(setf (first arg) 
+(aref (first seq) i)))) 
+(apply function arglist)) 
+(do-result (i) 
+(if (and (vectorp result-sequence) 
+(array-has-fil1-pointer-p result-sequence)) 
+(setf (fill-pointer result-sequence) 
+(max i (fill-pointer result-sequence)))))) 
+
+(declare (inline do-one-call)) 
+Decide if the result is a list or vector, 
+and loop through each element 
+
+(if (listp result-sequence) 
+
+(loop for i from 0 to (- . 1) 
+for r on result-sequence 
+do (setf (first r) 
+
+(do-one-call i))) 
+(loop for i from 0 to (- . 1) 
+do (setf (aref result-sequence i) 
+(do-one-call i)) 
+finally (do-result n)))) 
+result-sequence)) 
+
+There are several things worth noticing here. First, I split the main loop into two 
+versions, one where the result is a Hst, and the other where it is a vector. Rather 
+than duplicate code, the local functions do-one-call and do-result are defined. 
+The former is declared inline because it it called often, while the latter is not. The 
+arguments are computed by looking at each sequence in turn, taking the ith element 
+if it is a vector, and popping the sequence if it is a list. The arguments are stored 
+into the Hst argl i st, which has been preallocated to the correct size. All in aH, we 
+compute the answer fairly efficiently, without generating unnecessary garbage. 
+
+The application could be done more efficiently, however. Think what apply 
+must do: scan down the argument list, and put each argument into the location 
+expected by the function-calling conventions, and then branch to the function. Some 
+implementations provide a better way of doing this. For example, the TI Lisp Machine 
+provides two low-level primitive functions, %pus h and %ca 11, that compile into single 
+
+
+<a id='page-859'></a>
+instructions to put the arguments into the right locations and branch to the function. 
+With these primitives, the body of do - one - ca 11 would be: 
+
+(loop for seq on sequences 
+
+do (if distp (first seq)) 
+(%push (pop (first seq))) 
+(%push (aref (first seq) i)))) 
+
+(%call function length-sequences) 
+
+There is a remaining inefficiency, though. Each sequence is type-checked each time 
+through the loop, even though the type remains constant once it is determined the 
+first time. Theoretically, we could code separate loops for each combination of types, 
+just as we coded two loops depending on the type of the result sequence. But that 
+would mean 2^ loops for . sequences, and there is no limit on how large . can be. 
+
+It might be worth it to provide specialized functions for small values of n, and 
+dispatch to the appropriate function. Here's a start at that approach: 
+
+(defun map-into (result function &rest sequences) 
+(apply 
+
+(case (length sequences) 
+(0 (if distp result) #'map-into-list-0 #'map-into-vect-0)) 
+(1 (if distp result) 
+
+(if distp (first sequences)) 
+#'map-into-list -l-list #'map-into-list-l-vect) 
+(if distp (first sequences)) 
+#'map-into-vect-l-list #'map-into-vect-l-vect))) 
+(2 (if distp result) 
+(if distp (first sequences)) 
+
+(if distp (second sequences)) 
+#'map-into-list-2-list-list 
+#'map-into-list-2-list-vect) 
+
+...))) 
+(t (if distp result) #'map-into-list-n #*map-into-vect-n))) 
+result function sequences)) 
+
+The individual functions are not shown. This approach is efficient in execution 
+time, but it takes up a lot of space, considering that map -i nto is a relatively obscure 
+function. If map-i nto is declared i nl i ne and the compiler is reasonably good, then 
+it will produce code that just calls the appropriate function. 
+
+REDUCE with :key 
+
+Another change in the ANSI proposal is to add a : key keyword to reduce. This is a 
+useful addition-in fact, for years I had been using a r ed uce - by function that provided 
+
+
+<a id='page-860'></a>
+
+just this functionahty. In this section we see how to add the : key keyword. 
+
+At the top level, I define reduce as an interface to the keywordless function 
+reduce*. They are both proclaimed inline, so there will be no overhead for the 
+keywords in normal uses of reduce. 
+
+(proclaim '(inline reduce reduce*)) 
+
+(defun reduce* (fn seq from-end start end key init init-p) 
+(funcall (if (listp seq) #'reduce-list #'reduce-vect) 
+fn seq from-end (or start 0) end key init init-p)) 
+
+(defun reduce (function sequence &key from-end start end key 
+(initial-value nil initial-value-p)) 
+(reduce* function sequence from-end start end 
+key initial-value initial-value-p)) 
+
+The easier case is when the sequence is a vector: 
+
+(defun reduce-vect (fn seq from-end start end key init init-p) 
+(when (null end) (setf end (length seq))) 
+(assert (<= 0 start end (length seq)) (start end) 
+
+"Illegal subsequence of ~a --- istart ~d :end ~d" 
+seq start end) 
+
+(case (- end start) 
+(0 (if init-p init (funcall fn))) 
+(1 (if init-p 
+
+(funcall fn init (funcall-if key (aref seq start))) 
+(funcall-if key (aref seq start)))) 
+(t (if (not from-end) 
+(let ((result 
+(if init-p 
+
+(funcall 
+fn init 
+(funcall-if key (aref seq start))) 
+
+(funcall 
+fn 
+(funcall-if key (aref seq start)) 
+(funcall-if key (aref seq (+ start 1))))))) 
+
+(loop for i from (+ start (if init-p 1 2)) 
+to (- end 1) 
+do (setf result 
+
+(funcall 
+fn result 
+(funcall-if key (aref seq i))))) 
+
+result) 
+(let ((result 
+(if init-p 
+
+
+<a id='page-861'></a>
+(funcall 
+fn 
+(funcall-if key (aref seq (- end 1))) 
+init) 
+
+(funcall 
+fn 
+(funcall-if key (aref seq (- end 2))) 
+(funcall-if key (aref seq (- end 1))))))) 
+
+(loop for i from (- end (if init-p 2 3)) downto start 
+do (setf result 
+
+(funcall 
+fn 
+(funcall-if key (aref seq i)) 
+result))) 
+
+result))))) 
+
+When the sequence is a list, we go to some trouble to avoid computing the length, 
+since that is an 0{n) operation on lists. The hardest decision is what to do when the 
+list is to be traversed from the end. There are four choices: 
+
+* recurse. We could recursively walk the list until we hit the end, and then 
+compute the results on the way back up from the recursions. However, some 
+implementations may have fairly small bounds on the depths of recursive calls, 
+and a system function like reduce should never run afoul of such limitations. 
+In any event, the amount of stack space consumed by this approach would normally 
+be more than the amount of heap space consumed in the next approach. 
+* reverse. Wecouldreversethelistandthenconsider from-end true. The only 
+drawback is the time and space needed to construct the reversed list. 
+* nreverse. We could destructively reverse the list in place, do the reduce computation, 
+and then destructively reverse the list back to its original state (perhaps 
+with an unwind-protect added). Unfortunately, this is just incorrect. The list 
+may be bound to some variable that is accessible to the function used in the 
+reduction. If that is so, the function will see the reversed list, not the original 
+Hst. 
+* coerce. We could convert the Ust to a vector, and then use reduce-vect. This 
+has an advantage over the reverse approach in that vectors generally take only 
+half as much storage as lists. Therefore, this is the approach I adopt. 
+(defmacro funcall-if (fn arg) 
+(once-only (fn) 
+
+'(if,fn (funcall .fn ,arg) ,arg))) 
+
+<a id='page-862'></a>
+
+(defun reduce-list (fn seq from-end start end key init init-p) 
+(when (null end) (setf end most-positive-fixnum)) 
+(cond ((> start 0) 
+
+(reduce-list fn (nthcdr start seq) from-end 0 
+(- end start) key init init-p)) 
+((or (null seq) (eql start end)) 
+(if init-p init (funcall fn))) 
+((= (- end start) 1) 
+
+(if init-p 
+(funcall fn init (funcall-if key (first seq))) 
+(funcall-if key (first seq)))) 
+
+(from-end 
+(reduce-vect fn (coerce seq 'vector) t start end 
+key init init-p)) 
+((null (rest seq)) 
+
+(if init-p 
+(funcall fn init (funcall-if key (first seq))) 
+(funcall-if key (first seq)))) 
+
+(t (let ((result 
+(if init-p 
+
+(funcall 
+fn init 
+(funcall-if key (pop seq))) 
+
+(funcall 
+fn 
+(funcall-if key (pop seq)) 
+(funcall-if key (pop seq)))))) 
+
+(if end 
+(loop repeat (- end (if init-p 1 2)) while seq 
+do (setf result 
+
+(funcall 
+fn result 
+(funcall-if key (pop seq))))) 
+
+(loop while seq 
+do (setf result 
+
+(funcall 
+fn result 
+(funcall-if key (pop seq))))) 
+
+result))))) 
+
+
+<a id='page-863'></a>
+24.7 Exercises 
+&#9635; Exercise 24.2 [m] The function reduce is a very useful one, especially with the key 
+keyword. Write nonrecursive definitions for append and length using reduce. What 
+other common functions can be written with reduce? 
+
+&#9635; Exercise 24.3 The so-called loop keywords are not symbols in the keyword package. 
+The preceding code assumes they are all in the current package, but this is not quite 
+right. Change the definition of 1 oop so that any symbol with the same name as a loop 
+keyword acts as a keyword, regardless of the symbol's package. 
+
+&#9635; Exercise 24.4 Can there be a value for exp for which the following expressions are 
+not equivalent? Either demonstrate such an exp or argue why none can exist. 
+
+(loop for X in list collect exp) 
+(mapcar #'(lambda (x) exp) list)) 
+
+&#9635; Exercise 24.5 The object-oriented language Eiffel provides two interesting 1 oop 
+keywords: i nvari ant and vari ant. The former takes a Boolean-valued expression 
+that must remain true on every iteration of the loop, and the latter takes a integer-
+valued expression that must decrease on every iteration, but never becomes negative. 
+Errors are signaled if these conditions are violated. Use def 1 oop to implement these 
+two keywords. Make them generate code conditionally, based on a global flag. 
+
+24.8 Answers 
+Answer 24.1 
+
+(defvar *queue*) 
+
+(defun collect (item) (enqueue item *queue*)) 
+
+(defmacro with-collection (&body body) 
+
+'(let ((*queue* (make-queue))) 
+,@body 
+(queue-contents *queue*))) 
+
+Here's another version that allows the collection variable to be named. That way, 
+more than one collection can be going on at the same time. 
+
+
+<a id='page-864'></a>
+
+(defun collect (item &optional (queue *queue*)) 
+(enqueue item queue)) 
+
+(defmacro with-collection ((&optional (queue '*queue*)) 
+&body body) 
+
+'(let ((.queue (make-queue))) 
+.body 
+(queue-contents .queue))) 
+
+Answer 24.2 
+
+(defun append-r (x y) 
+(reduce #*cons . .-initial-value y :from-end t)) 
+
+(defun length-r (list) 
+(reduce #'+ list :key #'(lambda (x) 1))) 
+
+Answer 24.4 The difference between 1 oop and ma pea r is that the former uses only 
+one variable x, while the latter uses a different . each time. If x's extent is no bigger 
+than its scope (as it is in most expressions) then this makes no difference. But if any 
+X is captured, giving it a longer extent, then a difference shows up. Consider exp = 
+#'(lambda () x). 
+
+> (mapcar #'funcall (loop for . in '(1 2 3) collect 
+#'(lambda () x))) 
+(3 3 3) 
+
+> (mapcar #*funcal1 (mapcar #*(lambda (x) #*(lambda Ox)) 
+'(1 2 3))) 
+(1 2 3) 
+
+Answer 24.5 
+
+(defvar *check-invariants* t 
+"Should VARIANT and INVARIANT clauses in LOOP be checked?") 
+
+(defloop invariant (1 exp) 
+(when *check-invariants* 
+(add-body 1 '(assert .exp () "Invariant violated.")))) 
+
+(defloop variant (1 exp) 
+(when *check-invariants* 
+
+(let ((var (gensym "INV"))) 
+(add-var 1 var nil) 
+(add-body 1 '(setf .var (update-variant .var .exp)))))) 
+
+
+<a id='page-865'></a>
+
+(defun update-variant (old new) 
+(assert (or (null old) (< new old)) () 
+
+"Variant is not monotonically decreasing") 
+(assert (> new 0) () "Variant is no longer positive") 
+new) 
+
+Here's an example: 
+
+(defun gcd2 (a b) 
+"Greatest common divisor. For two positive integer arguments." 
+(check-type a (integer 1)) 
+(check-type b (integer 1)) 
+(loop with . = a with y = b 
+
+invariant (and (> . 0) (> y 0)) (= (gcd . y) (gcd a b)) 
+
+variant (max . y) 
+
+until (= X y) 
+
+do (if (> X y) (decf . y) (decf y .)) 
+
+finally (return .))) 
+
+Here the invariant is written semi-informally. We could include the calls to gcd, but 
+that seems to be defeating the purpose of gcd2, so that part is left as a comment. 
+The idea is that the comment should help the reader prove the correctness of the 
+code, and the executable part serves to notify the lazy reader when something is 
+demonstrably wrong at run time. 
+
+
+## Chapter 25
+<a id='page-866'></a>
+
+Troubleshooting 
+
+Perhaps if we wrote programs from childhood on, 
+as adults we'd be able to read them. 
+
+- Alan Peril's 
+
+w 
+w 
+hen you buy a new appUance such as a television, it comes with an instruction 
+booklet that lists troubleshooting hints in the following form: 
+
+PROBLEM: Nothing works. 
+
+Diagnosis: Power is off. 
+
+Remedy: Plug in outlet and turn on power switch. 
+
+If your Lisp compiler came without such a handy instruction booklet, this chapter may be of 
+some help. It lists some of the most common difficulties that Lisp programmers encounter. 
+
+
+<a id='page-867'></a>
+
+25.1 Nothing Happens 
+PROBLEM: You type an expression to Lisp's read-eval-print loop and get no response - 
+no result, no prompt. 
+
+Diagnosis: There are two likely reasons why output wasn't printed: either Lisp is still 
+doing read or it is still doing eval. These possibilities can be broken down further 
+into four cases: 
+
+Diagnosis: If the expression you type is incomplete. Lisp will wait for more input 
+to complete it. An expression can be incomplete because you have left off a right 
+parenthesis (or inserted an extra left parenthesis). Or you may have started a string, 
+atom, or comment without finishing it. This is particularly hard to spot when the error 
+spans multiple lines. A string begins and ends with double-quotes: "string"; an 
+atom containing unusual characters can be delimited by vertical bars: I AN ATOM I; 
+and a comment can be of the form # I a comment I #. Here are four incomplete 
+expressions: 
+
+(+ (* 3 (sqrt 5) 1) 
+(format t "~&X=''a, Y=~a. . y) 
+(get .strange-atom 'prop) 
+(if (= X 0) #1 test if X is zero 
+
+y 
+
+X) 
+
+Remedy: Add a ), ", I, and I #, respectively. Or hit the interrupt key and type the 
+input again. 
+
+Diagnosis: Your program may be waiting for input. 
+
+Remedy: Never do a (read) without first printing a prompt of some kind. If the 
+prompt does not end with a newline, a call to f i ni sh-output is also in order. In fact, 
+it is a good idea to call a function that is at a higher level than read. Several systems 
+define the function prompt-and- read. Here is one version: 
+
+(defun prompt-and-read (ctl-string &rest args) 
+"Print a prompt and read a reply." 
+(apply #'format t ctl-string args) 
+(finish-output) 
+(read)) 
+
+Diagnosis: The program may be caught in an infinite loop, either in an explicit 1 oop 
+or in a recursive function. 
+
+
+<a id='page-868'></a>
+
+Remedy: Interrupt the computation, get a back trace, and see what functions are 
+active. Check the base case and loop variant on active functions and loops. 
+
+Diagnosis: Even a simple expression like (mapc #'sqrt 1 ist) or (length list) 
+will cause an infinite loop if 1 i st is an infinite list - that is, a list that has some tail 
+that points back to itself. 
+
+Remedy: Be very careful any time you modify a structure with nconc, del ete, setf, 
+and so forth. 
+
+PROBLEM: You get a new prompt from the read-eval-print loop, but no output was 
+printed. 
+
+Diagnosis: The expression you evaluated must have returned no values at all, that 
+is, the resuh (values). 
+
+25.2 Change to Variable Has No Effect 
+PROBLEM: You redefined a variable, but the new value was ignored. 
+
+Diagnosis: Altering a variable by editing and re-evaluating a defvar form will not 
+change the variable's value, def va r only assigns an initial value when the variable is 
+unbound. 
+
+Remedy: Use setf to update the variable, or change the defvar to a defparameter. 
+
+Diagnosis: Updating a locally bound variable will not affect a like-named variable 
+outside that binding. For example, consider: 
+
+(defun check-ops (*ops*) 
+(if (null *ops*) 
+(setf *ops* *default-ops*)) 
+(mapcar #'check-op *ops*)) 
+
+If check - ops is called with a null argument, the *ops* that is a parameter of check - ops 
+will be updated, but the global *ops* will not be, even if it is declared special. 
+
+Remedy: Don't shadow variables you want to update. Use a different name for the 
+local variable. It is important to distinguish special and local variables. Stick to the 
+naming convention for special variables: they should begin and end with asterisks. 
+Don't forget to introduce a binding for all local variables. The following excerpt from 
+a recent textbook is an example of this error: 
+
+
+<a id='page-869'></a>
+(defun test () 
+(setq X 'test-data) ; Warning! 
+(solve-probl em x)) ; Don't do this. 
+
+This function should have been written: 
+
+(defun test () 
+(let ((x 'test-data)) ; Do this instead. 
+(solve-problem x))) 
+
+25.3 Change to Function Has No Effect 
+PROBLEM: You redefined a function, but the change was ignored. 
+
+Diagnosis: When you change a macro, or a function that has been declared inline, 
+the change will not necessarily be seen by users of the changed function. (It depends 
+on the implementation.) 
+
+Remedy: Recompile after changing a macro. Don't use inline functions until everything 
+is debugged. (Use (declare (not i nl i ne f)) to cancel an inline declaration). 
+
+Diagnosis: If you change a normal (non-inline) function, that change will be seen by 
+code that refers to the function by name, but not by code that refers to the old value 
+of the function itself. Consider: 
+
+(defparameter *scorer* #'score-fn) 
+
+(defparameter *printer* *print-fn) 
+
+(defun show (values) 
+
+(funcall Sprinter* 
+(funcall *scorer* values) 
+(reduce #'better values))) 
+
+Now suppose that the definitions of score - fn, pri nt -f n, and better are all changed. 
+Does any of the prior code have to be recompiled? The variable *pri nter* can stay 
+as is. When it is funcalled, the symbol pri nt-f . will be consulted for the current 
+functional value. Within show, the expression # ' better is compiled into code that 
+will get the current version of bette r, so it too is safe. However, the variable *s co r e r* 
+must be changed. Its value is the old definition of score - fn. 
+
+Remedy: Re-evaluate the definition of *scorer*. It is unfortunate, but this problem 
+encourages many programmers to use symbols where they really mean functions. 
+Symbols will be coerced to the global function they name when passed to funcall 
+
+
+<a id='page-870'></a>
+
+or apply, but this can be the source of another error. In the following example, the 
+symbol local - fn will not refer to the locally bound function. One needs to use 
+#'local - fn to refer to it. 
+
+(flat (docal-fn (x) ...)) 
+(mapcar *local-fn list)) 
+
+Diagnosis: If you changed the name of a function, did you change the name everywhere? 
+For example, if you decide to change the name of pr 1 nt - f . to pr i nt - function 
+but forget to change the value of *pri nter*, then the old function will be called. 
+
+Remedy: Use your editor's global replace command. To be even safer, redefine 
+obsolete functions to call error. The following function is handy for this purpose: 
+
+(defun make-obsolete (fn-name) 
+"Print an error if an obsolete function is called." 
+(setf (symbol-function fn-name) 
+
+#*(lambda (&rest args) 
+(declare (ignore args)) 
+(error "Obsolete function.")))) 
+
+Diagnosis: Are you using 1 abel s and flet properly? Consider again the function 
+repl ace-?-vars, which was defined in section 11.3 to replace an anonymous logic 
+variable with a unique new variable. 
+
+(defun replace-?-vars (exp) 
+"Replace any ? within exp with a var of the form ?123." 
+(cond ((eq exp *?) (gensym "?")) 
+
+((atom exp) exp) 
+(t (cons (replace-?-vars (first exp)) 
+(replace-?-vars (rest exp)))))) 
+
+It might occur to the reader that gensyming a different variable each time is wasteful. 
+The variables must be unique in each clause, but they can be shared across clauses. 
+So we could generate variables in the sequence ?1, ?2, intern them, and thus 
+reuse these variables in the next clause (provided we warn the user never to use 
+such variable names). One way to do that is to introduce a local variable to hold the 
+variable number, and then a local function to do the computation: 
+
+
+<a id='page-871'></a>
+
+(defun replace-?-vars (exp) 
+"Replace any ? within exp with a var of the form ?123." 
+.. Buggy Version *** 
+(let ((n 0)) 
+
+(flet 
+((replace-?-vars (exp) 
+
+(cond ((eq exp *?) (symbol '? (incf n))) 
+((atom exp) exp) 
+(t (cons (replace-?-vars (first exp)) 
+
+(replace-?-vars (rest exp))))))) 
+(replace-?-vars exp)))) 
+
+This version doesn't work. The problem is that flet, like let, defines a new function 
+within the body of the flet but not within the new function's definition. So two 
+lessons are learned here: use 1 abel s instead of flet to define recursive functions, 
+and don't shadow a function definition with a local definition of the same name (this 
+second lesson holds for variables as well). Let's fix the problem by changing 1 abel s 
+to flet and naming the local function recurse: 
+
+(defun replace-?-vars (exp) 
+"Replace any ? within exp with a var of the form ?123." 
+.. Buggy Version *** 
+(let ((n 0)) 
+
+(labels 
+((recurse (exp) 
+
+(cond ((eq exp '?) (symbol '? (incf n))) 
+((atom exp) exp) 
+(t (cons (replace-?-vars (first exp)) 
+
+(replace-?-vars (rest exp))))))) 
+(recurse exp)))) 
+
+Annoyingly, this version still doesn't work! This time, the problem is carelessness; 
+we changed the repl ace-? - vars to recurse in two places, but not in the two calls in 
+the body of recurse. 
+
+Remedy: In general, the lesson is to make sure you call the right function. If there 
+are two functions with similar effects and you call the wrong one, it can be hard to 
+see. This is especially true if they have similar names. 
+
+PROBLEM: Your closures don't seem to be working. 
+
+Diagnosis: You may be erroneously creating a lambda expression by consing up 
+code. Here's an example from a recent textbook: 
+
+
+<a id='page-872'></a>
+
+(defun make-specialization (c) 
+(let (pred newc) 
+
+(setf (get newc 'predicate) 
+'(lambda (obj) ; Warning! 
+(and ,(cons pred '(obj)) ; Don't do this. 
+(apply '.(get c 'predicate) (list obj))))) 
+
+...)) 
+
+Strictly speaking, this is legal according to Common Lisp the Language, although in 
+ANSI Common Lisp it will not he legal to use a list beginning with 1 ambda as a function. 
+But in either version, it is a bad idea to do so. A list beginning with 1 ambda is just that: 
+a list, not a closure. Therefore, it cannot capture lexical variables the way a closure 
+does. 
+
+Remedy: The correct way to create a closure is to evaluate a call to the special form 
+function, or its abbreviation, #'. Here is a replacement for the code beginning with 
+
+*(1 ambda Note that it is a closure, closed over pred and c. Also note that it gets 
+the predi cate each time it is called; thus, it is safe to use even when predicates are 
+being changed dynamically. The previous version would not work when a predicate 
+is changed. 
+#'(lambda (obj) ; Do this instead. 
+(and (funcall pred obj) 
+(funcall (get c 'predicate) obj))) 
+
+It is important to remember that function (and thus #') is a special form, and thus 
+only returns the right value when it is evaluated. A common error is to use # ' notation 
+in positions that are not evaluated: 
+
+(defvar *obscure-fns* '(#'cis #'cosh #'ash #'bit -orc2)) ; wrong 
+
+This does not create a list of four functions. Rather, it creates a list of four sublists; 
+the first subUst is (function eis). It is an error to funcall or apply such an object. 
+The two correct ways to create a Ust of functions are shown below. The first assures 
+that each function special form is evaluated, and the second uses function names 
+instead of functions, thus relying on funcall or apply to coerce the names to the 
+actual functions. 
+
+(defvar *obscure-fns* (list #'cis #'cosh #'ash #'bit -orc2)) 
+(defvar *obscure-fns* '(eis cosh ash bit-orc2)) 
+
+Another common error is to expect # ' i f or # Or to return a function. This is an error 
+
+
+<a id='page-873'></a>
+because special forms are just syntactic markers. There is no function named i f or 
+
+or; they should be thought of as directives that tell the compiler what to do with a 
+
+piece of code. 
+
+By the way, the function make - specialization above is bad not only for its lack of 
+function but also for its use of backquote. The following is a better use of backquote: 
+
+'(lambda (obj) 
+(and (,pred obj) 
+(,(get c 'predicate) obj))) 
+
+25.4 Values Change "by Themselves'' 
+PROBLEM: You deleted/removed something, but it didn't take effect. For example: 
+
+> (setf numbers '(1 2 3 4 5)) ^ (1 2 3 4 5) 
+
+> (remove 4 numbers) (1 2 3 5) 
+
+> numbers ^(12345) 
+
+> (delete 1 numbers) =^(2 3 4 5) 
+
+> numbers =^(12345) 
+
+Remedy: Use (setf numbers (delete 1 numbers)). Note that remove is a nondestructive 
+function, so it will never alter its arguments, del ete is destructive, but 
+when asked to delete the first element of a list, it returns the rest of the list, and thus 
+does not alter the list itself. That is why setf is necessary. Similar remarks hold for 
+nconc, sort, and other destructive operations. 
+
+PROBLEM: You created a hundred different structures and changed a field in one of 
+them. Suddenly, all the other ones magically changed! 
+
+Diagnosis: Different structures may share identical subfields. For example, suppose 
+you had: 
+
+(defstruct block 
+(possible-colors '(red green blue)) 
+...) 
+
+
+<a id='page-874'></a>
+
+(setf bl (make-block)) 
+(setf b2 (make-block)) 
+
+(delete 'green (block-possible-colors bl)) 
+
+Both bl and b2 share the initial Hst of possible colors. The del ete function modifies 
+this shared list, so green is deleted from b2's possible colors Hst just as surely as it is 
+deleted from bl's. 
+
+Remedy: Don't share pieces of data that you want to alter individually. In this case, 
+either use remove instead of delete, or allocate a different copy of the Hst to each 
+instance: 
+
+(defstruct block 
+
+(possible-colors (list 'red 'green 'blue)) 
+
+...) 
+
+Remember that the initial value field of a defstruct is an expression that is evaluated 
+anew each time make-bl ock is called. It is incorrect to think that the initial form is 
+evaluated once when the defstruct is defined. 
+
+25.5 Built-in Functions Don't Find Elements 
+PROBLEM: You tried (find item 1 ist), and you know it is there, but it wasn't 
+found. 
+
+Diagnosis: By default, many built-in functions use eql as an equality test, fi nd is 
+one of them. If i tern is, say, a list that is equal but not eql to one of the elements of 
+list, it will not be found. 
+
+Remedy: Use (find Item list :test #'equal) 
+
+Diagnosis: If the i tern is nil, then nil will be returned whether it is found or not. 
+
+Remedy: Use member or posi ti on instead of f i nd whenever the item can be nil. 
+
+25.6 Multiple Values Are Lost 
+PROBLEM: You only get one of the multiple values you were expecting. 
+
+Diagnosis: In certain contexts where a value must be tested by Lisp, multiple values 
+are discarded. For example, consider: 
+
+
+<a id='page-875'></a>
+(or (mv-1 x) (mv-2 x)) 
+(and (mv-1 x) (mv-2 x)) 
+(cond ((mv-1 x)) 
+
+(t (mv-2 X))) 
+
+In each case, if mv -2 returns multiple values, they will all be passed on. But if mv -1 
+returns multiple values, only the first value will be passed on. This is true even in 
+the last clause of a cond. So, while the final clause (t (mv-2 .)) passes on multiple 
+values, the final clause ((mv -2 .)) would not. 
+
+Diagnosis: Multiple values can be inadvertently lost in debugging as well. Suppose 
+I had: 
+
+(multiple-value-bind (a b c) 
+(mv-1 x) 
+...) 
+
+Now, if I become curious as to what mv -1 returns, I might change this code to: 
+
+(multiple-value-bind (a b c) 
+(print (mv-1 x)) debugging output 
+
+...) 
+
+Unfortunately, print will see only the first value returned by mv-1, and will return 
+only that one value to be bound to the variable a. The other values will be discarded, 
+and b and c will be bound to ni 1. 
+
+25.7 Declarations Are Ignored 
+PROBLEM: Your program uses 1024 . 1024 arrays of floating-point numbers. But 
+you find that it takes 15 seconds just to initialize such an array to zeros! Imagine how 
+inefficient it is to actually do any computation! Here is your function that zeroes an 
+array: 
+
+(defun zero-array (arr) 
+"Set the 1024x1024 array to all zeros." 
+(declare (type (array float) arr)) 
+(dotimes (i 1024) 
+
+(dotimes (j 1024) 
+(setf (aref arr i j) 0.0)))) 
+
+Diagnosis: The main problem here is an ineffective declaration. The type (array 
+
+
+<a id='page-876'></a>
+
+f 1 oat) does not help the compiler, because the array could be displaced to an array 
+of another type, and because f 1 oat encompasses both single- and double-precision 
+floating-point numbers. Thus, the compiler is forced to allocate storage for a new 
+copy of the number 0.0 for each of the million elements of the array. The function is 
+slow mainly because it generates so much garbage. 
+
+Remedy: The following version uses a much more effective type declaration: a 
+simple array of single-precision numbers. It also declares the size of the array and 
+turns safety checks off. It runs in under a second on a SPARCstation, which is slower 
+than optimized C, but faster than unoptimized C. 
+
+(defun zero-array (arr) 
+
+"Set the array to all zeros." 
+
+(declare (type (simple-array single-float (1024 1024)) arr) 
+
+(optimize (speed 3) (safety 0))) 
+
+(dotimes (i 1024) 
+
+(dotimes (j 1024) 
+
+(setf (aref arr i j) 0.0)))) 
+
+Another common error is to use something like (simple-vector fixnum) asatype 
+specifier. It is a quirk of Common Lisp that the simpl e-vector type specifier only 
+accepts a size, not a type, while the array, vector and simple-array specifiers all 
+accept an optional type followed by an optional size or list of sizes. To specify a 
+simplevectoroffixnums,use (simple-array fixnum (*)). 
+
+To be precise, simple-vector means (simple-array t (*)). This means that 
+simple-vector cannot be used in conjunction with any other type specifier. A 
+commonmistakeis to think that the type (and simple-vector (vector fixnum)) 
+is equivalent to (simple-array fixnum (*)), a simple, one-dimensional vector 
+of fixnums. Actually, it is equivalent to (simple-array t (*)), a simple one-
+dimensional array of any type elements. To eliminate this problem, avoid simpl e-
+vector altogether. 
+
+25.8 My Lisp Does the Wrong Thing 
+When all else fails, it is tempting to shift the blame for an error away from your own 
+code and onto the Common Lisp implementation. It is certainly true that errors are 
+found in existing implementations. But it is also true that most of the time. Common 
+Lisp is merely doing something the user did not expect rather than something that is 
+in error. 
+
+For example, a common "bug report" is to complain about read - from- str 1 ng. A 
+user might write: 
+
+
+<a id='page-877'></a>
+(read-from-string "a b c" :start 2) 
+
+expecting the expression to start reading at position 2 and thus return b. In fact, this 
+expression returns a. The angry user thinks the implementation has erroneously 
+ignored the : start argument and files a bug report,^ only to get back the following 
+explanation: 
+
+The function read-from-string takes two optional arguments, eof-errorp and 
+eof-val ue, in addition to the keyword arguments. Thus, in the expression above, 
+: start is taken as the value of eof-errorp, with 2 as the value of eof-val ue. The 
+correct answer is in fact to read from the start of the string and return the very first 
+form, a. 
+
+The functions read-from-string and parse-namestring are the only built-in 
+functions that have this problem, because they are the only ones that have both 
+optional and keyword arguments, with an even number of optional arguments. 
+The functions wr i te -1 i ne and write-string have keyword arguments and a single 
+optional argument (the stream), so if the stream is accidently omitted, an error will 
+be signaled. (If you type (write-1 ine str :start 4), the system will complain 
+either that: s ta rt is not a stream or that 4 is not a keyword.) 
+
+The moral is this: functions that have both optional and keyword arguments 
+
+are confusing. Take care when using existing functions that have this problem, and 
+
+abstain from using both in your own functions. 
+
+25.9 How to Find the Function You Want 
+Veteran Common Lisp programmers often experience a kind of software deja vu: 
+they believe that the code they are writing could be done by a built-in Common Lisp 
+function, but they can't remember the name of the function. 
+
+Here's an example: while coding up a problem I realized I needed a function that, 
+given the lists (abed) and (cd), would return (a b), that is, the part of the first 
+list without the second list. I thought that this was the kind of function that might 
+be in the standard, but I didn't know what it would be called. The desired function 
+is similar to set-difference, so I looked that up in the index of Common Lisp the 
+Language and was directed to [page 429](chapter12.md#page-429). I browsed through the section on "using lists 
+as sets" but found nothing appropriate. However, I was reminded of the function 
+but! ast, which is also similar to the desired function. The index directed me to 
+[page 422](chapter12.md#page-422) for butl ast, and on the same page I found 1 di f f, which was exactly the 
+desired function. It might have been easier to find (and remember) if it were called 
+1 i st-di ff erence, but the methodology of browsing near similar functions paid off. 
+
+^This misunderstanding has shown up even in published articles, such as Baker 1991. 
+
+
+<a id='page-878'></a>
+
+If you think you know part of the name of the desired function, then you can 
+use apropos to find it. For example, suppose I thought there was a function to push 
+a new element onto the front of an array. Looking under array, push-array, and 
+array- push in the index yields nothing. But I can turn to Lisp itself and ask: 
+
+> (apropos "push") 
+PUSH Macro (VALUE PLACE), pi ist 
+PUSHNEW Macro (VALUE PLACE &KEY ...). pi ist 
+VECTOR-PUSH function (NEW-ELEMENT VECTOR), pi is t 
+VECTOR-PUSH-EXTEND function (DATA VECTOR &OPTIONAL ...), pi ist 
+
+This should be enough to remind me that vector-push is the answer. If not, I can get 
+more information from the manual or from the online functions documentati on or 
+describe: 
+
+> (documentation 'vector-push 'function) 
+"Add NEW-ELEMENT as an element at the end of VECTOR. 
+The fill pointer (leader element 0) is the index of the next 
+element to be added. If the array is full, VECTOR-PUSH returns 
+NIL and the array is unaffected; use VECTOR-PUSH-EXTEND instead 
+if you want the array to grow automatically." 
+
+Another possibility is to browse through existing code that performs a similar purpose. 
+That way, you may find the exact function you want, and you may get additional 
+ideas on how to do things differently. 
+
+25.10 Syntax of LOOP 
+1 oop by itself is a powerful programming language, one with a syntax quite different 
+from the rest of Lisp. It is therefore important to exercise restraint in using 1 oop, lest 
+the reader of your program become lost. One simple rule for limiting the complexity 
+of loops is to avoid the with and and keywords. This eliminates most problems 
+dealing with binding and scope. 
+
+When in doubt, macro-expand the loop to see what it actually does. But if you 
+need to macro-expand, then perhaps it would be clearer to rewrite the loop with more 
+primitive constructs. 
+
+25.11 Syntax of COND 
+For many programmers, the special form cond is responsible for more syntax errors 
+than any other, with the possible exception of 1 oop. Because most cond-clause start 
+
+
+<a id='page-879'></a>
+with two left parentheses, beginners often come to the conclusion that every clause 
+must. This leads to errors like the following: 
+
+(let ((entry (assoc item list))) 
+(cond ((entry (process entry))) 
+...)) 
+
+Here entry is a variable, but the urge to put in an extra parenthesis means that the 
+cond-clause attempts to call entry as a function rather than testing its value as a 
+variable. 
+
+The opposite problem, leaving out a parenthesis, is also a source of error: 
+
+(cond (lookup item list) 
+(t nil)) 
+
+In this case, 1 ookup is accessed as a variable, when the intent was to call it as a 
+function. In Common Lisp this will usually lead to an unbound variable error, but in 
+Scheme this bug can be very difficult to pin down: the value of 1 ookup is the function 
+itself, and since this is not null, the test will succeed, and the expression will return 
+list without complaining. 
+
+The moral is to be careful with cond, especially when using Scheme. Note that 
+i f is much less error prone and looks just as nice when there are no more than two 
+branches. 
+
+25.12 Syntax of CASE 
+In a case special form, each clause consists of a key or list of keys, followed by the 
+value of that case. The thing to watch out for is when the key is t, otherwi se, or ni 1. 
+For example: 
+
+(case letter 
+(s ...) 
+(t ...) 
+(u ...)) 
+
+Here the t is taken as the default clause; it will always succeed, and all subsequent 
+clauses will be ignored. Similarly, using a () or ni 1 as a key will not have the desired 
+effect: it will be interpreted as an empty key hst. If you want to be completely safe, 
+you can use a list of keys for every clause.^ This is a particularly good idea when you 
+
+^Scheme requires a list of keys in each clause. Now you know why. 
+
+
+<a id='page-880'></a>
+
+write a macro that expands into a case. The following code correctly tests for t and 
+nil keys: 
+
+(case letter 
+((s) ...) 
+((t) ...) 
+((u) ...) 
+((nil) ...)) 
+
+25.13 Syntax of LET and LET* 
+A common error is leaving off a layer of parentheses in let, just like in cond. Another 
+error is to refer to a variable that has not yet been bound in a let. To avoid this 
+problem, use let* whenever a variable's initial binding refers to a previous variable. 
+
+25.14 Problems with Macros 
+In section 3.2 we describeda four-part approach to the design of macros: 
+
+* Decide if the macro is really necessary. 
+* Write down the syntax of the macro. 
+* Figure out what the macro should expand into. 
+* Use defmacro to implement the syntax/expansion correspondence. 
+This section shows the problems that can arise in each part, starting with the first: 
+
+* Decide if the macro is really necessary. 
+Macros extend the rules for evaluating an expression, while function calls obey the 
+rules. Therefore, it can be a mistake to define too many macros, since they can make 
+it more difficult to understand a program. A common mistake is to define macros 
+that do not violate the usual evaluation rules. One recent book on AI programming 
+suggests the following: 
+
+(defmacro binding-of (binding) ; Warning! 
+'(cadr .binding)) ; Don't do this. 
+
+The only possible reason for this macro is an unfounded desire for efficiency. Always 
+use an inl ine function instead of a macro for such cases. That way you get the 
+
+
+<a id='page-881'></a>
+efficiency gain, you have not introduced a spurious macro, and you gain the ability to 
+apply or map the function #' bi ndi ng-of, something you could not do with a macro: 
+
+(proclaim '(inline binding-of)) 
+
+(defun binding-of (binding) ; Do this instead. 
+(second binding)) 
+
+* Write down the syntax of the macro. 
+Try to make your macro follow conventions laid down by similar macros. For example, 
+if your macro defines something, it should obey the conventions of defvar, 
+defstruct, def mac r o, and the rest: start with the letters def, take the name of the thing 
+to be defined as the first argument, then a lambda-list if appropriate, then a value or 
+body. It would be nice to allow for optional declarations and documentation strings. 
+
+If your macro binds some variables or variablelike objects, use the conventions 
+
+laid down by let, let*, and 1 abel s: allow for a list of variable or (variable init-val) 
+
+pairs. If you are iterating over some kind of sequence, follow dotimes and dol i st. 
+
+For example, here is the syntax of a macro to iterate over the leaves of a tree of conses: 
+
+(defmacro dotree ((var tree &optional result) &body body) 
+"Perform body with var bound to every leaf of tree, 
+then return result. Return and Go can be used in body." 
+...) 
+
+* Figure out what the macro should expand into. 
+* Use defmacro to implement the syntax/expansion correspondence. 
+There are a number of things to watch out for in figuring out how to expand a macro. 
+
+First, make sure you don't shadow local variables. Consider the following definition 
+
+for pop- end, a function to pop off and return the last element of a list, while updating 
+
+the list to no longer contain the last element. The definition uses last1, which was 
+
+defined on [page 305](chapter9.md#page-305) to return the last element of a list, and the built-in function 
+
+nbutl ast returns all but the last element of a list, destructively altering the list. 
+
+(defmacro pop-end (place) ; Warning!Buggy! 
+"Pop and return last element of the list in PLACE." 
+'(let ((result (lastl .place))) 
+
+(setf .place (nbutlast .place)) 
+
+result)) 
+
+This will do the wrong thing for (pop-end result), or for other expressions that 
+
+mention the variable resul t. The solution is to use a brand new local variable that 
+
+could not possibly be used elsewhere: 
+
+
+<a id='page-882'></a>
+
+(defmacro pop-end (place) ; Lessbuggy 
+"Pop and return last element of the list in PLACE." 
+(let ((result (gensym))) 
+
+'(let ((.result (lastl .place))) 
+(setf .place (nbutlast .place)) 
+.result))) 
+There is still the problem of shadowing local functions. For example, a user who 
+writes: 
+
+(flet ((lastl (x) (sqrt x))) 
+(pop-end list) 
+...) 
+
+will be in for a surprise, pop-end will expand into code that calls last1, but since 
+lastl has been locally defined to be something else, the code won't work. Thus, the 
+expansion of the macro violates referential transparency. To be perfectly safe, we 
+could try: 
+
+(defmacro pop-end (place) ; Lessbuggy 
+"Pop and return last element of the list in PLACE." 
+(let ((result (gensym))) 
+
+'(let ((.result (funcall .#'lastl .place))) 
+(setf .place (funcall .#'nbutlast .place)) 
+.result))) 
+This approach is sometimes used by Scheme programmers, but Common Lisp programmers 
+usually do not bother, since it is rarer to define local functions in Common 
+Lisp. Indeed, in Common Lisp the Language, 2d edition, it was explicitly stated (page 
+
+260) that a user function cannot redefine or even bind any built-in function, variable, 
+or macro. Even if it is not prohibited in your implementation, redefining or binding 
+a built-in function is confusing and should be avoided. 
+Common Lisp programmers expect that arguments will be evaluated in left-to-
+right order, and that no argument is evaluated more than once. Our definition of 
+pop-end violates the second of these expectations. Consider: 
+
+(pop-end (aref lists (incf i))) = 
+
+(LET ((#:G3096 (LASTl (AREF LISTS (INCF I))))) 
+(SETF (AREF LISTS (INCF I)) (NBUTLAST (AREF LISTS (INCF I)))) 
+#:G3096) 
+
+This increments i three times, when it should increment it only once. We could fix 
+this by introducing more local variables into the expansion: 
+
+
+<a id='page-883'></a>
+(let* ((tempi (incf i)) 
+(temp2 (AREF LISTS tempi)) 
+(temp3 (LASTl temp2))) 
+
+(setf (aref lists tempi) (nbutlast temp2)) 
+temp3) 
+
+This kind of left-to-right argument processing via local variables is done automatically 
+by the Common Lisp setf mechanism. Fortunately, the mechanism is easy to use. 
+We can redefine pop-end to call pop directly: 
+
+(defmacro pop-end (place) 
+"Pop and return last element of the list in PLACE." 
+'(pop (last .place))) 
+
+Now all we need to do is define the setf method for 1 as t. Here is a simple definition. 
+It makes use of the function last2, which returns the last two elements of a list. In 
+ANSI Common Lisp we could use (last list 2), but with a pre-ANSI compiler we 
+need to define last2: 
+
+(defsetf last (place) (value) 
+'(setf (cdr (last2 .place)) .value)) 
+
+(defun last2 (list) 
+"Return the last two elements of a list. " 
+(if (null (rest2 list)) 
+
+list 
+(last2 (rest list)))) 
+
+Here are some macro-expansions of calls to pop-end and to the setf method for 
+last. Different compilers will produce different code, but they will always respect 
+the left-to-right, one-evaluation-only semantics: 
+
+> (pop-end (aref (foo lists) (incf i))) = 
+(LET ((G0128 (AREF (FOO LISTS) (SETQ I (+ I 1))))) 
+
+(PR061 
+(CAR (LAST G0128)) 
+(SYSiSETCDR (LAST2 G0128) (CDR (LAST G0128))))) 
+
+> (setf (last (append . y)) 'end) = 
+(SYSiSETCDR (LAST2 (APPEND X Y)) 'END) 
+
+Unfortunately, there is an error in the setf method for last. It assumes that the 
+list will have at least two elements. If the Ust is empty, it is probably an error, but if 
+alisthasexactlyoneelement, then (setf (last list) val) should have the same 
+effect as (setf list val). But there is no way to do that with defsetf, because the 
+
+
+<a id='page-884'></a>
+
+setf method defined by def setf never sees list itself. Instead, it sees a local variable 
+that is automatically bound to the value of list. In other words, def setf evaluates the 
+list and val for you, so that you needn't worry about evaluating the arguments out of 
+order, or more than once. 
+
+To solve the problem we need to go beyond the simple def setf macro and delve 
+into the complexities of def i ne-setf-method, one of the trickiest macros in all of 
+Common Lisp, def i ne-setf-method defines a setf method not by writing code 
+directly but by specifying five values that will be used by Common Lisp to write the 
+code for a call to setf. The five values give more control over the exact order in 
+which expressions are evaluated, variables are bound, and results are returned. The 
+five values are: (1) a list of temporary, local variables used in the code; (2) a list of 
+values these variables should be bound to; (3) a list of one variable to hold the value 
+specified in the call to setf; (4) code that will store the value in the proper place; (5) 
+code that will access the value of the place. This is necessary for variations of setf 
+like i ncf and pop, which need to both access and store. 
+
+In the following setf method for last, then, we are defining the meaning of 
+(setf (last place) value). We keep track of all the variables and values needed 
+to evaluate pi ace, and add to that three more local variables: last2-var will hold 
+the last two elements of the list, last2-p will be true only if there are two or more 
+elements in the list, and last - va r will hold the form to access the last element of the 
+list. We also make up a new variable, resul t, to hold the val ue. The code to store 
+the value either modifies the cdr of last2-var, if the list is long enough, or it stores 
+directly into pi ace. The code to access the value just retrieves 1 diSt-\/ar. 
+
+(define-setf-method last (place) 
+(multiple-value-bind (temps vals stores store-form access-form) 
+(get-setf-method place) 
+
+(let ((result (gensym)) 
+(last2-var (gensym)) 
+(last2-p (gensym)) 
+(last-var (gensym))) 
+
+Return 5 vals: temps vals stores store-form access-form 
+
+(values 
+'(.temps Jast2-var .last2-p .last-var) 
+'(.@vals (last2 .access-form) 
+
+(= (length .last2-var) 2) 
+
+(if .last2-p (rest .last2-var) .access-form)) 
+(list result) 
+'(if .last2-p 
+
+(setf (cdr .last2-var) .result) 
+(let ((.(first stores) .result)) 
+.store-form)) 
+last-var)))) 
+
+
+<a id='page-885'></a>
+It should be mentioned that setf methods are very useful and powerful things. It 
+is often better to provide a setf method for an arbitrary function, f, than to define 
+a special setting function, say, set-f. The advantage of the setf method is that it 
+can be used in idioms like incf and pop, in addition to setf itself. Also, in ANSI 
+Common Lisp, it is permissible to name a function with #' (setf f), so you can also 
+use map or apply the setf method. Most setf methods are for functions that just 
+access data, but it is permissible to define setf methods for functions that do any 
+computation whatsoever. As a rather fanciful example, here is a setf method for the 
+square-root function. It makes (setf (sqrt x) 5) be almost equivalent to (setf . 
+(* 5 5)); the difference is that the first returns 5 while the second returns 25. 
+
+(define-setf-method sqrt (num) 
+(multiple-value-bind (temps vals stores store-form access-form) 
+(get-setf-method num) 
+(let ((store (gensym))) 
+
+(values temps 
+vals 
+(list store) 
+
+'(let ((.(first stores) (* .store .store))) 
+.store-form 
+.store) 
+'(sqrt .access-form))))) 
+
+Turning from setf methods back to macros, another hard part about writing portable 
+macros is anticipating what compilers might warn about. Let's go back to the dotree 
+macro. Its definition might look in part like this: 
+
+(defmacro dotree ((var tree &optional result) &body body) 
+"Perform body with var bound to every leaf of tree, 
+then return result. Return and Go can be used in body." 
+
+'(let ((.var)) 
+.body)) 
+
+Now suppose a user decides to count the leaves of a tree with: 
+
+(let ((count 0)) 
+(dotree (leaf tree count) 
+(incf count))) 
+
+The problem is that the variable leaf is not used in the body of the macro, and 
+a compiler may well issue a warning to that effect. To make matters worse, a 
+conscientious user might write: 
+
+
+<a id='page-886'></a>
+
+(let ((count 0)) 
+
+(dotree (leaf tree count) 
+
+(declare (ignore leaf)) 
+
+(incf count))) 
+
+The designer of a new macro must decide if declarations are allowed and must make 
+sure that compiler warnings will not be generated unless they are warranted. 
+
+Macros have the full power of Lisp at their disposal, but the macro designer must 
+remember the purpose of a macro is to translate macro code into primitive code, 
+and not to do any computations. Consider the following macro, which assumes that 
+translate - rul e-body is defined elsewhere: 
+
+(defmacro defrule (name &body body) ; Warning! buggy! 
+
+"Define a new rule with the given name." 
+
+(setf (get name 'rule) 
+
+*#*(lambda () ,(translate-rule-body body)))) 
+
+The idea is to store a function under the rul e property of the rule's name. But this 
+definition is incorrect because the function is stored as a side effect of expanding the 
+macro, rather than as an effect of executing the expanded macro code. The correct 
+definition is: 
+
+(defmacro defrule (name &body body) 
+"Define a new rule with the given name." 
+
+'(setf (get '.name 'rule) 
+#'(lambda () .(translate-rule-body body)))) 
+Beginners sometimes fail to see the difference between these two approaches, because 
+they both have the same result when interpreting a file that makes use of 
+def rul e. But when the file is compiled and later loaded into a different Lisp image, 
+the difference becomes clear: the first definition erroneously stores the function 
+in the compiler's image, while the second produces code that correctly stores the 
+function when the code is loaded. 
+
+Beginning macro users have asked, "How can I have a macro that expands into 
+code that does more than one thing? Can I splice in the results of a macro?" 
+
+If by this the beginner wants a macro that just does two things, the answer is 
+simply to use a progn. There will be no efficiency problem, even if the progn forms 
+are nested. That is, if macro-expansion results in code like: 
+
+(progn (progn (progn a b) c) (progn d e)) 
+
+the compiler will treat it the same as (progn abode). 
+
+
+<a id='page-887'></a>
+On the other hand, if the beginner wants a macro that returns two values, the 
+proper form is val ues, but it must be understood that the calling function needs to 
+arrange specially to see both values. There is no way around this limitation. That is, 
+there is no way to write a macro-or a function for that matter-that will "splice in" its 
+results to an arbitrary call. For example, the function f 1 oor returns two values (the 
+quotient and remainder), as does i ntern (the symbol and whether or not the symbol 
+already existed). But we need a special form to capture these values. For example, 
+compare: 
+
+> (list (floor 11 5) (intern ..))=^(2 X) 
+
+> (multiple-value-call #*list 
+(floor 11 5) (intern 'x))=^(2 1 X -.INTERNAL) 
+
+25.15 A Style Guide to Lisp 
+In a sense, this whole book is a style guide to writing quality Lisp programs. But this 
+section attempts to distill some of the lessons into a set of guidelines. 
+
+When to Define a Function 
+
+Lisp programs tend to consist of many short functions, in contrast to some languages 
+that prefer a style using fewer, longer functions. New functions should be introduced 
+for any of the following reasons: 
+
+1. For a specific, easily stated purpose. 
+2. To break up a function that is too long. 
+3. When the name would be useful documentation. 
+4. When it is used in several places. 
+In (2), it is interesting to consider what "too long" means. Charniak et al. (1987) 
+suggested that 20 lines is the limit. But now that large bit-map displays have replaced 
+24-line terminals, function definitions have become longer. So perhaps one screenful 
+is a better limit than 20 lines. The addition of f let and 1 abel s also contributes to 
+longer function definitions. 
+
+
+<a id='page-888'></a>
+
+When to Define a Special Variable 
+
+In general, it is a good idea to minimize the use of special variables. Lexical variables 
+are easier to understand, precisely because their scope is limited. Try to limit special 
+variables to one of the following uses: 
+
+1. For parameters that are used in many functions spread throughout a program. 
+2. For global, persistant, mutable data, such as a data base of facts. 
+3. For infrequent but deeply nested use. 
+An example of (3) might be a variable like ^standard-output*, which is used by 
+low-level priniting functions. It would be confusing to have to pass this variable 
+around among all your high-level functions just to make it available to pri nt. 
+
+When to Bind a Lexical Variable 
+
+In contrast to special variables, lexical variables are encouraged. You should feel free 
+to introduce a lexical variable (with a let, 1 ambda or defun) for any of the following 
+reasons: 
+
+1. To avoid typing in the same expression twice. 
+2. To avoid computing the same expression twice. 
+3. When the name would be useful documentation. 
+4. To keep the indentation manageable. 
+How to Choose a Name 
+
+Your choice of names for functions, variables, and other objects should be clear, 
+meaningful, and consistent. Some of the conventions are listed here: 
+
+1. Use mostly letters and hyphens, and use full words: del ete -file . 
+2. You can introduce an abbreviation if you are consistent: get-dtree, dtree-
+fetch. For example, this book uses f . consistently as the abbreviation for 
+"function." 
+3. Predicates end in -p (or ? in Scheme), unless the name is already a predicate: 
+variable-p, occurs-in. 
+4. Destructive functions start with . (or end in ! in Scheme): nreverse. 
+
+<a id='page-889'></a>
+5. Generalized variable-setting macros end in f: setf, incf. (Push is an exception.) 
+6. Slot selectors created by defstruct are of the form type-slot. Use this for 
+non-def s t r uct selectors as well: cha r- bi ts. 
+7. Many functions have the form action-object: copy -1i st, del ete -f i1 e. 
+8. Other functions have the form object-modifier: 1 ist-length, char-lessp. Be 
+consistent in your choice between these two forms. Don't have pri nt-edge 
+and vertex-pri nt in the same system. 
+9. A function of the form modulename-functionname is an indication that packages 
+are needed. Use parser: pri nt-tree instead of parser-print-tree. 
+10. Special variables have asterisks: *db*, *print-length*. 
+11. Constants do not have asterisks: pi, most-positive-fixnum. 
+12. Parameters are named by type: (defun length (sequence) ...) or by purpose: 
+(defun subsetp (subset superset) ...) or both: (defun / (number 
+&rest denominator-numbers) ...) 
+13. Avoid ambiguity. A variable named last-node could have two meanings; use 
+previ ous - node or f i nal - node instead. 
+14. A name like propagate-constraints-to-neighboring-vertexes is too long, 
+while prp-con is too short. In deciding on length, consider how the name will 
+be used: propagate-constraints is just right, because a typical call will be 
+(propagate-constrai nts vertex), so it will be obvious what the constraints 
+are propagating to. 
+Deciding on the Order of Parameters 
+
+Once you have decided to define a function, you must decide what parameters it will 
+take, and in what order. In general, 
+
+1. Put important parameters first (and optional ones last). 
+2. Make it read like prose if possible: (push element stack). 
+3. Group similar parameters together. 
+Interestingly, the choice of a parameter list for top-level functions (those that the 
+
+user is expected to call) depends on the environment in which the user will function. 
+
+In many systems the user can type a keystroke to get back the previous input to the top 
+
+
+<a id='page-890'></a>
+
+level, and can then edit that input and re-execute it. In these systems it is preferable 
+to have the parameters that are likely to change be at the end of the parameter list, so 
+that they can be easily edited. On systems that do not offer this kind of editing, it is 
+better to either use ke3word parameters or make the highly variable parameters first 
+in the list (with the others optional), so that the user will not have to type as much. 
+
+Many users want to have required keyword parameters. It turns out that all 
+keyword parameters are optional, but the following trick is equivalent to a required 
+keyword parameter. First we define the function requi red to signal an error, and 
+then we use a call to requi red as the default value for any keyword that we want to 
+make required: 
+
+(defun required () 
+(error "A required keyword argument was not supplied.")) 
+
+(defun fn (x &key (y (required))) 
+...) 
+
+25.16 Dealing with Files, Packages, and Systems 
+While this book has covered topics that are more advanced than any other Lisp text 
+available, it is still concerned only with programming in the small: a single project at 
+a time, capable of being implemented by a single programmer. More challenging is 
+the problem of programming in the large: building multiproject, multiprogranuner 
+systems that interact well. 
+
+This section briefly outlines an approach to organizing a larger project into manageable 
+components, and how to place those components in files. 
+
+Every system should have a separate file that defines the other files that comprise 
+the system. I recommend defining any packages in that file, although others put 
+package definitions in separate files. 
+
+The following is a sample file for the mythical system Project-X. Each entry in the 
+file is discussed in turn. 
+
+1. The first line is a comment known as the mode line. The text editor emacs will 
+parse the characters between delimiters to discover that the file contains 
+Lisp code, and thus the Lisp editing commands should be made available. The 
+dialect of Lisp and the package are also specified. This notation is becoming 
+widespread as other text editors emulate emacs's conventions. 
+2. Each file should have a description of its contents, along with information on 
+the authors and what revisions have taken place. 
+
+<a id='page-891'></a>
+3. Comments with four semicolons (;;;;) denote header lines. Many text editors 
+supply a command to print all such lines, thus achieving an outline of the major 
+parts of a file. 
+4. The first executable form in every file should be an i n-package. Here we use 
+the user package. We will soon create the proj ect-x package, and it will be 
+used in all subsequent files. 
+5. We want to define the Project-X system as a collection of files. Unfortunately, 
+Common Lisp provides no way to do that, so we have to load our own system-
+definition functions explicitly with a call to 1 oad. 
+6. The call to def i ne - system specifies the files that make up Project-X. We provide 
+a name for the system, a directory for the source and object files, and a list of 
+modules that make up the system. Each module is a list consisting of the module 
+name (a symbol) followed by a one or more files (strings or pathnames). We 
+have used keywords as the module names to eliminate any possible name 
+conflicts, but any symbol could be used. 
+7. The call to def package defines the package proj ect-x. For more on packages, 
+see section 24.1. 
+8. The final form prints instructions on how to load and run the system. 
+Mode: Lisp; Syntax: Common-Lisp; Package: User 
+
+(Brief description of system here.) 
+
+;; Define the Project-X system, 
+
+(in-package "USER") 
+
+(load "/usr/norvig/defsys.lisp") ; load define-system 
+
+(define-system ;; Define the system Project-X 
+:naaje :project-x 
+:source-dir "/usr/norvig/project-x/*.lisp" 
+:object-dir "/usr/norvig/project-x/*.bin" 
+:modules '((:macros "header" "macros") 
+
+(:main "parser" "transformer" "optimizer" 
+"commands" "database" "output") 
+(:windows "xwindows" "clx" "client"))) 
+
+(defpackage :project-x ;; Define the package Project-X 
+(:export "DEFINE-X" "DO-X" "RUN-X") 
+(:nicknames "PX") 
+(:use common-lisp)) 
+
+
+<a id='page-892'></a>
+
+(format *debug-io* "~& To load the Project-X system, type 
+(make-system :name :project-x) 
+To run the system, type 
+(project-x:run-x)") 
+
+Each of the files that make up the system will start like this: 
+
+;;: -*- Mode: Lisp; Syntax: Common-Lisp; Package: Project-X -*
+
+
+(in-package "PROJECT-X") 
+
+Now we need to provide the system-definition functions, def ine-system 
+and make-system. The idea is that def ine-system is used to define the files that 
+make up a system, the modules that the system is comprised of, and the files that 
+make up each module. It is necessary to group files into modules because some 
+files may depend on others. For example, all macros, special variables, constants, 
+and inline functions need to be both compiled and loaded before any other files that 
+reference them are compiled. In Project-X, all defvar, defparameter, defconstant, 
+and defstruct^ forms are put in the file header, and all defmacro forms are put in the 
+file macros. Together these two files form the first module, named : mac ros, which 
+will be loaded before the other two modules (: ma i . and : wi ndows) are compiled and 
+loaded. 
+
+define-system also provides a place to specify a directory where the source 
+and object files will reside. For larger systems spread across multiple directories, 
+def i ne-system will not be adequate. 
+
+Here is the first part of the file defsys.lisp, showing the definition of 
+def i ne-system and the structure sys. 
+
+;;; -*- Mode: Lisp; Syntax: Common-Lisp; Package: User -*
+
+
+;;;; A Facility for Defining Systems and their Components 
+
+(in-package "USER") 
+
+(defvar ^systems* nil "List of all systems defined.") 
+
+(defstruct sys 
+"A system containing a number of source and object files." 
+name source-dir object-dir modules) 
+
+^defstruct forms are put here because they may create inline functions. 
+
+
+<a id='page-893'></a>
+(defun define-system (&key name source-dir object-dir modules) 
+"Define a new system." 
+;; Delete any old system of this name, and add the new one. 
+(setf *systems* (delete name *systems* :test #*string-equal 
+
+:key #'sys-name)) 
+
+(push (make-sys 
+:name (string name) 
+:source-dir (pathname source-dir) 
+:object-dir (pathname object-dir) 
+:modules *((:all (mapcar #'first modules)) ..modules)) 
+
+*systems*) 
+name) 
+
+The function make - sy s t em is used to compile and/or load a previously defined system. 
+The name supplied is used to look up the definition of a system, and one of three 
+actions is taken on the system. The keyword : cl oad means to compile and then load 
+files. :1 oad means to load files; if there is an object (compiled) file and it is newer than 
+the source file, then it will be loaded, otherwise the soiu-ce file will be loaded. Finally, 
+: update means to compile just those source files that have been changed since their 
+corresponding source files were last altered, and to load the new compiled version. 
+
+(defun make-system (&key (module :all) (action :cload) 
+
+(name (sys-name (first *systems*)))) 
+"Compile and/or load a system or one of its modules." 
+(let ((system (find name *systems* :key #'sys-name 
+
+:test #'string-equal))) 
+(check-type system (not null)) 
+(check-type action (member :cload -.update -.load)) 
+(with-compilation-unit () (sys-action module system action)) 
+
+(defun sys-action (x system action) 
+"Perform the specified action to . in this system. 
+X can be a module name (symbol), file name (string) 
+or a list." 
+(typecase . 
+
+(symbol (let ((files (rest (assoc . (sys-modules system))))) 
+
+(if (null files) 
+(warn "No files for module "a" x) 
+(sys-action files system action)))) 
+
+(list (dolist (file x) 
+(sys-action file system action))) 
+((string pathname) 
+(let ((source (merge-pathnames 
+X (sys-source-dir system))) 
+(object (merge-pathnames 
+X (sys-object-dir system)))) 
+(case action 
+
+
+<a id='page-894'></a>
+
+(reload (compile-file source) (load object)) 
+(lupdate (unless (newer-file-p object source) 
+
+(compile-file source)) 
+(load object)) 
+(.-load (if (newer-file-p object source) 
+(load object) 
+(load source)))))) 
+(t (warn "Don't know how to ~a "a in system "a" 
+action X system)))) 
+
+To support this, we need to be able to compare the write dates on files. This is not 
+hard to do, since Common Lisp provides the function f i 1 e-wri te-date. 
+
+(defun newer-file-p (filel file2) 
+
+"Is filel newer than (written later than) file2? " 
+
+(>-num (if (probe-file filel) (file-write-date filel)) 
+
+(if (probe-file file2) (file-write-date file2)))) 
+
+(defun >-num (x y) 
+"True if X and y are numbers, and . > y." 
+(and (numberp x) (numberp y) (> . y))) 
+
+25.17 Portability Problems 
+Programming is difficult. All programmers know the frustration of trpng to get a 
+program to work according to the specification. But one thing that really defines the 
+professional programmer is the ability to write portable programs that will work on 
+a variety of systems. A portable program not only must work on the computer it 
+was tested on but also must anticipate the difference between your computer and 
+other ones. To do this, you must understand the Common Lisp specification in the 
+abstract, not just how it is implemented on your particular machine. 
+
+There are three ways in which Common Lisp systems can vary: in the treatment 
+of "is an error" situations, in the treatment of unspecified results, and in extensions 
+to the language. 
+
+Common Lisp the Language specifies that it "is an error" to pass a non-number to 
+an arithmetic function. For example, it is an error to evaluate (+ nil 1). However, 
+it is not specified what should be done in this situation. Some implementations may 
+signal an error, but others may not. An implementation would be within its right to 
+return 1, or any other number or non-number as the result. 
+
+An unsuspecting programmer may code an expression that is an error but still 
+computes reasonable results in his or her implementation. A common example is 
+applying get to a non-symbol. This is an error, but many implementations will 
+
+
+<a id='page-895'></a>
+just return nil, so the programmer may write (get . * prop) when (if (symbol . 
+.) (get . 'prop) nil) is actually needed for portable code. Another common 
+problem is with subseq and the sequence functions that take : end keywords. It is an 
+error if the : end parameter is not an integer less than the length of the sequence, but 
+many implementations will not complain if : end is nil or is an integer greater than 
+the length of the sequence. 
+
+The Common Lisp specification often places constraints on the result that a 
+function must compute, without fully specifying the result. For example, both of the 
+following are valid results: 
+
+> (union '(a b c) '(b c d)) =i> (A . C D) 
+> (union *(a b c) '(b c d)) (D A . C) 
+
+A program that relies on one order or the other will not be portable. The same warning 
+applies to i ntersecti on and set-di ff erence. Many functions do not specify how 
+much the result shares with the input. The following computation has only one 
+possible printed result: 
+
+> (remove 'x '(a b c d)) ^ (A . C D) 
+
+However, it is not specified whether the output is eq or only equal to the second 
+
+input. 
+
+Input/output is particularly prone to variation, as different operating systems 
+can have very different conceptions of how I/O and the file system works. Things 
+to watch out for are whether read-char echoes its input or not, the need to include 
+finish-output, andvariationinwherenewlines are needed, particularly with respect 
+to the top level. 
+
+Finally, many implementations provide extensions to Common Lisp, either by 
+adding entirely new functions or by modifying existing functions. The programmer 
+must be careful not to use such extensions in portable code. 
+
+25.18 Exercises 
+&#9635; Exercise 25.1 Pi] On your next programming project, keep a log of each bug you 
+detect and its eventual cause and remedy. Classify each one according to the taxonomy 
+given in this chapter. What kind of mistakes do you make most often? How 
+could you correct that? 
+
+&#9635; Exercise 25.2 [s-d] Take a Common Lisp program and get it to work with a different 
+compiler on a different computer. Make sure you use conditional compilation read 
+
+
+<a id='page-896'></a>
+
+macros (#+ and #-) so that the program will work on both systems. What did you 
+
+have to change? 
+
+&#9635; Exercise 25.3 [m] Write a setf method for i f that works like this: 
+
+(setf (if test (first x) y) (+ 2 3)) = 
+(let ((temp (+ 2 3))) 
+
+(if test 
+(setf (first x) temp) 
+(setf y temp))) 
+
+You will need to use def i ne-setf-method, not defsetf. (Why?) Make sure you 
+handle the case where there is no else part to the i f. 
+
+&#9635; Exercise 25.4 [h] Write a setf method for 1 ookup, a function to get the value for a 
+key in an association list. 
+
+(defun lookup (key alist) 
+"Get the cdr of key's entry in the association list." 
+(cdr (assoc key alist))) 
+
+25.19 Answers 
+Answer 25.4 Here is the setf method for 1 ookup. It looks for the key in the a-list, 
+and if the key is there, it modifies the cdr of the pair containing the key; otherwise it 
+adds a new key/value pair to the front of the a-list. 
+
+(define-setf-method lookup (key alist-place) 
+(multiple-value-bind (temps vals stores store-form access-form) 
+(get-setf-method alist-place) 
+
+(let ((key-var (gensym)) 
+(pair-var (gensym)) 
+(result (gensym))) 
+
+(values 
+'(.key-var .temps .pair-var) 
+'(.key .vals (assoc .key-var .access-form)) 
+'(.result) 
+
+'(if.pair-var 
+(setf (cdr .pair-var) .result) 
+(let ((.(first stores) 
+(aeons .key-var .result .access-form))) 
+
+.store-form 
+
+.result)) 
+
+'(cdr .pair-var))))) 
+
+
+## Appendix
+<a id='page-897'></a>
+
+Obtaining the Code 
+in this Book 
+
+FTP: The File Transfer Protocol 
+
+FTP is a ftle transfer protocol that is widely accepted by computers around the world. FTP 
+makes it easy to transfer hies between two computers on which you have accounts. But more 
+importantly, it also allows a user on one computer to access hies on a computer on which he or 
+she does not have an account, as long as both computers are connected to the Internet. This is 
+known as anonymous FTP. 
+
+All the code in this book is available for anonymous FTP from the computer mkp. com in files 
+in the directory pub/norvi g. The ftle README in that directory gives further instructions on using 
+theftles. 
+
+In the session below, the user smith retrieves the ftles from mkp.com. Smith's input is in 
+slanted font. The login name must be anonymous, and Smith's own mail address is used as the 
+password. The conunand cd pub/norvig changes to that directory, and the command Is lists 
+all the ftles. The command mget * retrieves all ftles (the m stands for "multiple"). Normally, 
+there would be a prompt before each ftle asking if you do indeed want to copy it, but the prompt 
+command disabled this. The command bye ends the FTP session. 
+
+%ftpmkp.com i or ftp 199182.55.2) 
+Name (mkp.comismith): anonymous 
+331 Guest login ok. send ident as password 
+Password: smith@cs.stateu.edu 
+230 Guest login ok. access restrictions apply 
+ftp> cd pub/norvig 
+
+
+<a id='page-898'></a>
+
+250 CWD command successful. 
+ftp> Is 
+
+f tp> prompt 
+Interactive mode off. 
+ftp> mget * 
+
+ftp> bye 
+% 
+
+Anonymous FTP is a privilege, not a right. The site administrators at mkp. com and 
+at other sites below have made their systems available out of a spirit of sharing, but 
+there are real costs that must be paid for the cormections, storage, and processing 
+that makes this sharing possible. To avoid overloading these systems, do not FTP 
+from 7:00 a.m. to 6:00 p.m. local time. This is especially true for sites not in yoiu: 
+country. If you are using this book in a class, ask your professor for a particular piece 
+of software before you try to FTP it; it would be wasteful if everybody in the class 
+transferred the same thing. Use common sense and be considerate: none of us want 
+to see sites start to close down because a few are abusing their privileges. 
+
+If you do not have FTP access to the Internet, you can still obtain the nles from 
+this book by contacting Morgan Kaufmann at the following: 
+
+Morgan Kaufmann Publishers, Inc. 
+340 Pine Street, Sbcth Floor 
+San Francisco, CA 94104-3205 
+USA 
+Telephone 415/392-2665 
+Facsimile 415/982-2665 
+Internet mkp@mkp.com 
+(800) 745-7323 
+
+Make sure to specify which format you want: 
+
+Macintosh diskette ISBN 1-55860-227-5 
+DOS 5.25 diskette ISBN 1-55860-228-3 
+DOS 3.5 diskette ISBN 1-55860-229-1 
+
+Available Software 
+
+In addition to the program from this book, a good deal of other software is available. 
+The tables below list some of the relevant AI/Lisp programs. Each entry lists the 
+name of the system, an address, and some comments. The address is either a 
+computer from which you can FTP, or a mail address of a contact. Unless it is stated 
+that distribution is by email or Roppy or requires a license, then you can FTP from the 
+contact's home computer. In some cases the host computer and/or directory have 
+
+
+<a id='page-899'></a>
+
+been provided in italics in the comments field. However, in most cases it should 
+be obvious what files to transfer. First do an 1 s command to see what files and 
+directories are available. If there is a file called README, follow its advice: do a get 
+README and then look at the file. If you still haven't found what you are looking for, 
+be aware that most hosts keep their public software in the directory pub. Do a cd pub 
+and then another 1 s, and you should find the desired files. 
+
+If a file ends in the suffix . Z, then you should give the FTP command bi na ry before 
+transferring it, and then give the UNIX command uncompress to recover the original 
+file. Files with the suffix .tar contain several files that can be unpacked with the 
+tar command. If you have problems, consult your local documentation or system 
+administrator. 
+
+Knowledge Representation 
+System Address Comments 
+Babbler rsfl@ra.msstate.edu email; Markov chains/NLP 
+
+BACK peltason@tubvm.cs.tu-berlin.de 3.5''floppy; KL-ONE family 
+
+Belief almond@stat.washington.edu belief networks 
+Classic dlm@research.att.com license; KL-ONE family 
+FolGetfol fausto@irst.it tape; Weyrauch's FOL system 
+Framekit ehn-^^cs.cmu.edu floppy; frames 
+
+FrameWork mkant+@cs.cmu.edu a.gp.cs.cmu.edu:/usr/mkant/Public; irdimes 
+Frobs kessler@cs.utah.edu frames 
+Knowbel kramer@ai.toronto.edu sorted/temporal logic 
+MVL ginsberg@t. stanford.edu multivalued logics 
+OPS slisp-group@b.gp.cs.cmu.edu Forgy's OPS-5 language 
+PARKA spector@cs.umd.edu frames (designed for connection machine) 
+Parmenides pshell@cs.cmu.edu frames 
+Rhetorical miller@cs.rochester.edu planning, time logic 
+SB-ONE kobsa@cs.uni-sb.de license; in German; KL-ONE family 
+SNePS shapiro@cs.buffalo.edu license; semantic net/NLP 
+SPI cs.orst.edu Probabilistic inference 
+YAK franconi@irst.it KL-ONE family 
+
+
+<a id='page-900'></a>
+
+Planning and Learning 
+
+System Address Comments 
+COBWEB/3 cobweb@ptolemy.arc.nasa.gov email; concept formation 
+MATS 
+MICRO-xxx 
+kautz@research.att.com 
+waander@cs.ume.edu 
+license; temporal constraints 
+case-based reasoning 
+Nonlin nonlin-users-request@cs.umd.edu Tate's planner in Common Lisp 
+Prodigy prodigy@cs.cmu.edu license; planning and learning 
+PROTOS porter@cs.utexas.edu knowledge acquisition 
+SNLP 
+SOAR 
+weld@cs.washington.edu 
+soar-requests/@cs.cmu.edu 
+nonlinear planner 
+license; integrated architecture 
+THEO tom.mitchell@cs.cmu.edu frames, learning 
+Tileworld pollack@ai.sri.com planning testbed 
+TileWorld tileworld@ptolemy.arc.nasa.gov planning testbed 
+
+Mathematics 
+
+System Address Comments 
+JACAL jaffer@altdorf.ai.mit.edu algebraic manipulation 
+Maxima rascal.ics.utexas.edu version of Macsyma; also proof-checker, nqthm 
+MMA f ateman@cs .berkeley.edu peoplesparc.berkeley.edu^ub/mma, *; algebra 
+XLispStat umnstat.stat.umn.edu Statistics; also S Bayes 
+
+Compilers and Utilities 
+
+System Address Comments 
+AKCL rascal.ics.utexas.edu Austin Koyoto Common Lisp 
+
+CLX, CLUE export.lcs.mit.edu Common Lisp interface to X Windows 
+Gambit gambit@cs.brandeis.edu acorn.cs.brandeis.edu:dist/gambit*; Scheme compiler 
+ISI Grapher isi.edu Graph displayer; also NLP word lists 
+
+PCL arisia.xerox.com Implementation of CLOS 
+Prolog aisunl.ai.uga.edu Prolog-based utilities and NLP programs 
+PYTHON ram+@cs.cmu.edu a.gp.cs.cmu.edu: Common Lisp Compiler and tools 
+SBProlog arizona.edu Stony Brook Prolog, Icon, Snobol 
+Scheme altdorf.ai.mit.edu Scheme utilities and compilers 
+Scheme scheme@nexus.yorku.ca Scheme utilities and programs 
+SIOD bu.edu users/gjc; small scheme interpreter 
+Utilities a.gp.cs.cmu.edu /usr/mkant/Public; profiling, def system, etc. 
+XLisp cs.orst.edu Lisp interpreter 
+XScheme tut.cis.ohio-state.edu Also mitscheme compiler; sbprolog 
+
+
+## Bibliography
+<a id='page-901'></a>
+
+Abelson, Harold, and Gerald J. Sussman, with Juhe Sussman. (1985) Structure and 
+Interpretation of Computer Programs. MIT Press. 
+Aho, A. v., and J. D. UUman. (1972) The Theory of Parsing, Translation, and Compiling. 
+Prentice-Hall. 
+
+Ait-Kaci, Hassan. (1991) Warren's Abstract Machine: A Tutorial Reconstruction. MIT 
+Press. An earlier version was published as "The WAM: A (Real) Tutorial." 
+Digital Equipment Corporation Paris Research Lab, Report no. 5. 
+
+Ait-Kaci, Hassan, Patrick Lincoln, and Roger Nasr. (1987) "Le Fun: Logic, Equations 
+and Functions." Proceedings of the IEEE, CH2472-9/87. 
+Allen, James. (1987) Natural Language Understanding. Benjamin/Cummings. 
+Allen, James, James Hendler, and Austin Tate. (1990) Readings in Planning. Morgan 
+Kaufmann. 
+Allen, John. (1978) Anatomy of Lisp. McGraw-Hill. 
+Amarel, Saul. (1968) "On Representation of Problems of Reasoning about Actors." 
+InMachine Intelligence 3, ed. Donald Michie. Edinburgh University Press. 
+Anderson, James A. D. W. (1989) Pop-11 Comes of Age: the advancement of an AI 
+programming language. Ellis Horwood. 
+Anderson, John Robert. (1976) Language, Memory, and Thought. Lawrence Erlbaum. 
+Baker, Henry G. (1991) "Pragmatic Parsing in Common Lisp; or. Putting defmacro 
+on Steroids." Lisp Pointers 4, no. 2. 
+Barr, Avron, and Edward A. Feigenbaum. (1981) The Handbook of Artificial Intelligence. 
+3 vols. Morgan Kaufmann. 
+
+
+<a id='page-902'></a>
+
+Batali, John, Edmund Goodhue, Chris Hanson, Howie Shrobe, Richard M. Stallman, 
+and Gerald Jay Sussman. (1982) "The Scheme-81 Architecture-System and 
+Chip." In Proceedings, Conference on Advanced Research in VLSI, 69-77. 
+
+Bennett, James S. (1985) "Roget: A Knowledge-Based System for Acquiring the 
+Conceptual Structure of a Diagnostic Expert System." Journal of Automated 
+Reasoning 1'.9-74. 
+
+Berlekamp, E. R., J. H. Conway, and R. K. Guy. (1982) Winning Ways. 2 vols. 
+Academic Press. 
+
+BerUn, Andrew, and Daniel Weise. (1990) "Compiling scientific code using partial 
+evaluation." IEEE Computer, 25-37. 
+
+Bobrow, Daniel G. (1968) "Natural Language Input for a Computer Problem-Solving 
+System." In Minsky 1968. 
+
+Bobrow, DanielG. (1982) LOOPS: An Object-OrientedProgrammingSystemforlnterlisp. 
+Xerox PARC. 
+
+Bobrow, Daniel G. (1985) "If Prolog is the Answer, What is the Question? or What 
+It Takes to Support AI Programming Paradigms." IEEE Transactions on Software 
+Engineenng, SE-11. 
+
+Bobrow, Daniel G., Kenneth Kahn, Gregor Kiczales, Larry Masinter, Mark Stefik, 
+and Frank Zdybel. (1986) "Common Loops: Merging Lisp and Object-Oriented 
+Programming." Proceedings of the ACM Conference on Object-Oriented Systems, 
+Languages, and Applications. 
+
+Boyer, R. S., and J. S. Moore. (1972) "The Sharing of Structure in Theorem Proving 
+Programs." In Machine Intelligence 7, ed. B. Meitzerand D. Michie. Wiley. 
+
+Brachman, Ronald J., and Hector J. Levesque. (1985) Readings in Knowledge Representation. 
+Morgan Kaufmann. 
+
+Brachman, Ronald J., Richard E. Pikes, and Hector J. Levesque. (1983) "KRYPTON: A 
+Functional Approach to Knowledge Representation," FLAIR Technical Report 
+no. 16, Fairchild Laboratory for Artificial Intelligence. Reprinted in Brachman 
+and Levesque 1985. 
+
+Bratko, Ivan. (1990) PrologProgramming for Artificial Intelligence. Addison-Wesley. 
+
+Bromley, Hank, and Richard Lamson. (1987) A Guide to Programming the Lisp Machine. 
+2ded. Kluwer Academic. 
+
+Brooks, Rodney A. (1985) Programming in Common Lisp. Wiley. 
+
+
+<a id='page-903'></a>
+
+Brownston, L., R. Farrell, E. Kant, and N. Martin. (1985) Programming Expert Systems 
+in 0PS5, Addison-Wesley. 
+
+Buchanan, Bruce G., and Edward Hance ShortUffe. (1984) Rule-based Expert Systems: 
+The MYCIN Experiments of the Stanford Heuristic Programming Project. Addison-
+Wesley. 
+
+Bundy, Alan. (1984) Catalogue of Artificial Intelligence Tools. Springer-Verlag. 
+
+Cannon, Howard I. (1980) "Flavors." AI Lab Technical Report, MIT. 
+
+Carbonell, Jamie A. (1981) Subjective Understanding: Computer Models of Belief Systems. 
+UMI Research Press. 
+
+Cardelli, Luca, and Peter Wegner. (1986) "On Understanding Types, Data Abstraction 
+and Polymorphism." ACM Computing Surveys 17. 
+
+Chapman, David. (1987) "Planning for Conjunctive Goals." Artificial Intelligence 
+32:333-377. Reprinted in Allen, Hendler, and Tate 1990. 
+
+Charniak, Eugene, and Drew McDermott. (1985) Introduction to Artificial Intelligence. 
+Addison-Wesley. 
+
+Charniak, Eugene, Christopher Riesbeck, Drew McDermott, and James Meehan. 
+(1987) Artificial Intelligence Programming. 2d ed. Lawrence Erlbaum. 
+
+Cheeseman, Peter. (1985) "In Defense of Probability." InProceedings of the Ninth 
+//CA/1002-1009. 
+Chomsky, Noam. (1972) Language and Mind. Harcourt Brace Jovanovich. 
+Church, Alonzo. (1941) "The Calculi of Lambda-Conversion." Annals of Mathematical 
+Studies. Vol. 6, Princeton University Press. 
+
+Church, Kenneth, and Ramesh Patil. (1982) "Coping with Syntactic Ambiguity, or 
+How to Put the Block in the Box on the Table." American Journal of Computational 
+Linguistics 8, nos. 3-4:139-149. 
+
+dinger, William, and Jonathan Rees. (1991) Revised^ Report on the Algorithmic Language 
+Scheme. Unpublished document available online on cs.voregin.edu. 
+Clocksin, William F., and Christopher S. Mellish. (1987) Programming in Prolog 
+3d ed. Springer-Verlag. 
+Clowes, Maxwell B. (1971) "On Seeing Things." Artificial Intelligence 2:79-116. 
+Coelho, Helder, and Jose C. Cotta. (1988) Prolog by Example. Springer-Verlag. 
+
+
+<a id='page-904'></a>
+
+Cohen, Jacques. (1985) "Describing Prolog by its interpretation and compilation." 
+Communications of the ACM 28, no. 12:1311-1324. 
+
+Cohen, Jacques. (1990) "Constraint Logic Programming Languages." Communications 
+of the ACM 33, no. 7:52-68. 
+
+Colby, Kenneth. (1975) Artificial Paranoia, Pergamon. 
+
+Collins, Allan. (1978) "Fragments of a Theory of Human Plausible Reasoning. Theoretical 
+Issues in Natural Language Processing, David Waltz, ed. ACM, Reprinted 
+in Shafer and Pearl 1990. 
+
+Colmerauer, Alain. (1985) "Prolog in 10 figures." Communications of the ACM 28, 
+no. 12:1296-1310. 
+
+Colmerauer, Alain. (1990) "An Introduction to Prolog III." Communications of the 
+ACM 33, no. 7:69-90. 
+
+Colmerauer, Alain, Henri Kanoui, Robert Pasero, and Phillipe Roussel. (1973) 
+Un Systeme de Communication Homme-Machine en Frangais. Rapport, Croupe 
+d'lntelligence Artificielle, Universit&eacute; d'Aix-Marseille II. 
+
+Cooper, Thomas .., and Nancy Wogrin. (1988) Rule-Based Programming with 0PS5 . 
+Morgan Kaufmann. 
+
+Dahl, Ole-Johan, and Kristen Nygaard. (1966) "SIMULA-An Algol-based Simulation 
+Language." Communications of the ACM 9, no. 9:671-678. 
+
+Davenport, J. H., Y. Siret, and E. Tournier. (1988) Computer Algebra: Systems and 
+Algorithms for Algebraic Computation. Academic Press. 
+
+Davis, Ernest. (1990) Representations ofCommonsense Reasoning. Morgan Kaufmann. 
+
+Davis, Lawrence. (1987) Genetic Algorithms and Simulated Annealing, Morgan Kaufmann. 
+
+
+Davis, Lawrence. (1991) Handbook of Genetic Algorithms, van Nostrand Reinhold. 
+
+Davis, Randall. (1977) "Meta-Level Knowledge." Proceedings of the Fifth IJCAI, 920
+
+
+928. Reprinted in Buchanan and Shortliffe 1984. 
+Davis, Randall. (1979) "Interactive Transfer of Expertise." Artificial Intelligence 
+12:121-157. Reprinted in Buchanan and Shortliffe 1984. 
+
+Davis, Randall, and Douglas B. Lenat. (1982) Knowledge-Based Systems in Artificial 
+Intelligence. McGraw-Hill. 
+
+DeGroot, A. D. (1965) Thought and Choice in Chess. Mouton. (English translation, 
+with additions, of the Dutch edition, 1946.) 
+
+
+<a id='page-905'></a>
+
+DeGroot, A. D., (1966) "Perception and Memory versus Thought: Some Old Ideas 
+and Recent Findings." In Problem Solving, ed. B. Kleinmuntz. Wiley. 
+
+de Kleer, Johan. (1986a) "An Assumption-Based Truth Maintenance System." Artificial 
+Intelligence 28:127-162. Reprinted in Ginsberg 1987. 
+
+de Kleer, Johan. (1986b) "Extending the ATMS." Artificial Intelligence 28:163-196. 
+
+de Kleer, Johan. (1986c) "Problem-Solving with the ATMS." Artificial Intelligence 
+28:197-224. 
+
+de Kleer, Johan. (1988) "A General Labelling Algorithm for Assumption-Based Truth 
+Maintenance." Proceedings of theAAAI, 188-192. 
+
+Dowty, David R., Robert E. Wall, and Stanley Peters. (1981) Introduction to Montague 
+Semantics. SyntheseLanguageLibrary, vol. 11. D. Reidel. 
+
+Doyle, Jon. (1979) "A Truth Maintenance System." Artificial Intelligence 12:231-272. 
+
+Doyle, Jon. (1983) "The Ins and Outs of Reason Maintenance." Proceedings of the 
+Eighth IJCAI3A9-351. 
+
+Dubois, Didier, and Henri Prade. (1988) "An Introduction to Possibilistic and 
+Fuzzy Logics." Non-Standard Logics for Automated Reasoning. Academic Press. 
+Reprinted in Shafer and Pearl 1990. 
+
+Farley, Jay. (1970) "An Efficient Context-Free Parsing Algorithm." CACM6, no. 2:451
+
+
+455. Reprinted in Grosz et al. 1986. 
+Elcock, E. W., and . Hoddinott. (1986) "Comments on Kornfeld's 'Equality for 
+Prolog': E-Unification as a Mechanism for Augmenting the Prolog Search 
+Strategy." Proceedings oftheAAAI, 766-775. 
+
+Emanuelson, P., and A. Haraldsson. (1980) "On Compiling Embedded Languages 
+in Lisp." Lisp Conference, Stanford, Calif., 208-215. 
+
+Ernst, G. W., and Newell, Alan. (1969) GPS: A Case Study in Generality and Problem 
+Solving. Academic Press. 
+
+Fateman, Richard J. (1973) "Reply to an Editorial." ACM SIGSAM Bulletin 25 
+(March):9-ll. 
+
+Fateman, Richard J. (1974) "Polynomial Multiplication, Powers and Asymptotic 
+Analysis: Some Comments," SIAM Journal of Computation no. 3,3:196-213. 
+
+Fateman, Richard J. (1979) "MACSYMA's general simplifier: philosophy and operation." 
+In Proceedings of the 1979 MACSYMA Users' Conference (MUC-79), ed. 
+
+V. E. Lewis 563-582. Lab for Computer Science, MIT. 
+
+<a id='page-906'></a>
+
+Fateman, Richard J. (1991) "FRPOLY: A Benchmark Revisited/' Lisp and Symbolic 
+Computation 4:155-164. 
+Feigenbaum, Edward A. and Julian Feldman. (1963) Computers and Thought. 
+McGraw-Hill. 
+Field, A.J., and P. G. Harrison. (1988) Functional Programming. Addison-Wesley. 
+
+Eikes, RichardE., andNilsJ. Nilsson. (1971)"STRIPS: ANew Approach to the Application 
+of Theorem Proving to Problem Solving," Artificial Intelligence 2:189-208. 
+Reprinted in Allen, Hendler, and Tate 1990. 
+
+Fodor, Jerry A. (1975) The Language of Thought. Harvard University Press. 
+Forgy, Charles L. (1981) 'OPS5 User's Manual." Report CMU-CS-81-135, Carnegie 
+Mellon University. 
+Forgy, Charles L. (1982) "RETE: A Fast Algorithm for the Many Pattern/Many Object 
+Pattern Match Problem." Artificial Intelligence 19:17-37. 
+Franz Inc. (1988) Common Lisp: the Reference. Addison-Wesley. 
+
+Gabriel, Richard P. (1985) Performance and evaluation of Lisp systems. MIT Press. 
+Gabriel, Richard P. (1990) "Lisp." In Encyclopedia of Artificial Intelligence, ed. Stuart 
+
+C. Shapiro. Wiley. 
+Galler, B. .., and M. J. Fisher. (1964) "An Improved Equivalence Algorithm." Communications 
+oftheACMl, no. 5:301-303. 
+
+Gazdar, Richard, and Chris Mellish. (1989) Natural Language Processing in Lisp. 
+Addison-Wesley. Also published simultaneously: Natural Language Processing 
+in Prolog. 
+
+Genesereth, Michael R., and Matthew L. Ginsberg. (1985) "Logic Programming." 
+Communications oftheACMl^, no. 9:933-941. 
+
+Genesereth, Michael R., and Nils J. Nilsson. (1987) Logical Foundations of Artificial 
+Intelligence. Morgan Kaufmann. 
+
+Giannesini, Francis, H. Kanoui, R. Pasero, and M. van Caneghem. (1986) Prolog. 
+Addison-Wesley. 
+
+Ginsberg, Matthew L. (1987) Readings in NonMonotonic Reasoning. Morgan Kaufmann. 
+
+
+Ginsberg, Matthew L., and William D. Harvey. (1990) "Iterative Broadening." Proceedings, 
+Eighth National Conference on AI, 216-220. 
+
+
+<a id='page-907'></a>
+
+Goldberg, Adele, and David Robinson. (1983) Smalltalk-80: The Language and its 
+Implementation, Addison-Wesley. 
+
+Goldberg, David E. (1989) Genetic Algorithms in Search, Optimization and Machine 
+Learning. Addison-Wesley. 
+
+Gordon, Jean, and Edward H. Shortliffe. (1984) "The Dempster-Shafer Theory of 
+Evidence." In Buchanan and Shortliffe 1984. 
+
+Green, Cordell. (1968) "Theorem-proving by resolution as a basis for question-
+answering systems." InMachine Intelligence 4, ed. Bernard Meitzer and Donald 
+Michie. 183-205. Edinburgh University Press. 
+
+Grosz, Barbara J., Karen Sparck-Jones, and Bonnie Lynn Webber. (1986) Readings in 
+Natural Language Processing. Morgan Kaufmann. 
+
+Guzman, Adolfo. (1968) "Computer Recognition of Three-Dimensional Objects in 
+a Visual Scene." Ph.D. thesis, MAC-TR-59, Project MAC, MIT. 
+
+Hafner, Carole, and Bruce Wilcox. (1974) LISP/MTS Programmer's Guide. Mental 
+Health Research Institute Communication no. 302, University of Michigan. 
+
+Harris, Zellig S. (1982) A Grammar of English on Mathematical Principles. Wiley. 
+
+Hasemer, Tony, and John Domingue. (1989) Common Lisp Programming for Artificial 
+Intelligence. Addison-Wesley. 
+
+Hayes, Patrick. "Naive Physics I: Ontology for Liquids." In Hobbs and Moore 1985. 
+
+Heckerman, David. (1986) "Probabilistic Interpretations for Mycin's Certainty Factors." 
+In Uncertainty in Artificial Intelligence, ed. L. N. Kanal and J. F. Lemmer. 
+Elsevier (North-Holland). Reprinted in Shafer and Pearl 1990. 
+
+Hennessey, Wade L. (1989) Common Lisp. McGraw-Hill. 
+
+Hewitt, Carl. (1977) "Viewing Control Structures as Patterns of Passing Messages." 
+Artificial Intelligence 8, no. 3:323-384. 
+
+Hobbs, Jerry R., and Robert C. Moore. (1985) Formal Theories of the Commonsense 
+World. Ablex. 
+
+Hofstader, Douglas R. (1979) Godel, Escher, Bach: An Eternal Golden Braid. Vintage. 
+
+H&ouml;dobler, Steffen. (1987) Foundations ofEquational Logic Programming, Springer-
+Verlag Lecture Notes in Artificial Intelligence. 
+
+Huddleston, Rodney. (1984) Introduction to the Grammar of English. Cambridge 
+University Press. 
+
+
+<a id='page-908'></a>
+
+Huffman, David A. (1971) "Impossible Objects as Nonsense Pictures." 295-323. 
+InMachine Intelligence 6, ed. B. Meitzer and D. Michie. Edinburgh University 
+Press. 
+
+Hughes, R. J. M. (1985) "Lazy Memo Functions." In Proceedings of the Conference on 
+Functional Programming and Computer Architecture, Nancy, 129-146. Springer-
+Verlag. 
+
+Ingerman, Peter Z. (1961) "Thunks." Communications of the ACM 4, no. 1:55-58. 
+Jaff ar, Joxan, Jean-Louis Lassez, and Michael J. Maher. (1984) "A Theory of Complete 
+
+Logic Programs with Equality." Journal of Logic Programming 3:211-223. 
+Jackson, Peter. (1990) Introduction to Expert Systems. 2d ed. Addison-Wesley. 
+James, Glenn, and Robert C. James. (1949) Mathematics Dictionary. Van Nostrand. 
+Kanal, L. N., and J. F. Lemmer. (1986) Uncertainty in Artificial Intelligence. North-
+
+Holland. 
+Kanal, L. N., and J. F. Lemmer. (1988) Uncertainty in Artificial Intelligence 2. North-
+
+Holland. 
+Kay, Alan. (1969) "The Reactive Engine." Ph.D. thesis. University of Utah. 
+Kay, Martin. (1980) Algorithm schemata and data structures in syntactic processing. 
+
+Xerox Palo Alto Research Center Report CSL-80-12. Reprinted in Grosz et al. 
+1986. 
+Kernighan, .. W., and P. J. Plauger. (1974) The Elements of Programming Style. 
+McGraw-Hill. 
+Kernighan, .. W., and P. J. Plauger. (1981) Software Tools in Pascal. Addison-Wesley. 
+Keene, Sonya. (1989) Object-Oriented Programming in Common Lisp: A Programmer's 
+Guide to CLOS. Addison-Wesley. 
+Knight, K. (1989) "Unification: A Multidisciplinary Survey." ACM Computing Surveys, 
+21, no. 1:93-121. 
+Knuth, Donald E., and Robert W. Moore. (1975) "An Analysis of Alpha-Beta Pruning." 
+Artificial Intelligence, 6, no. 4:293-326. 
+Kohlbecker, Eugene Edmund, Jr. (1986) "Syntactic Extensions in the Programming 
+Language Lisp." Ph.D. thesis, Indiana University. 
+Korf, R. E. (1985) "Depth-first Iterative Deepening: an Optimal Admissible Tree 
+Search." Artificial Intelligence 27:97-109. 
+
+
+<a id='page-909'></a>
+
+Kornfeld, W. .. (1983) "Equality for Prolog." Proceedings of the Seventh IJCAl 514519. 
+
+
+Koschman, Timothy. (1990) The Common Lisp Companion. Wiley. 
+
+Kowalski, Robert. (1974) "Predicate logic as a programming language." In Proceedings 
+of the IFIP-74 Congress, 569-574. North-Holland. 
+
+Kowalski, Robert. (1979) "Algorithm = Logic + Control." Communications of the AC M 
+22:424-436. 
+
+Kowalski, Robert. (1980) Logic for Problem Solving. North-Holland. 
+
+Kowalski, Robert. (1988) "The Early Years of Logic Programming." Communications 
+o/f/ze ACM 31:38-43. 
+
+Kranz, David, Richard Kelsey, Jonathan Rees, Paul Hudak, James Philbin, and Norman 
+Adams. (1986) "ORBIT: An optimizing compiler for Scheme." SIGPLAN 
+Compiler Construction Conference. 
+
+Kreutzer, Wolfgang, and Bruce McKenzie. (1990) Programming for Artificial Intelligence: 
+Methods, Tools and Applications. Addison-Wesley. 
+
+Lakoff, George. (1987) Women, Fire and Dangerous Things: What Categories Reveal 
+About the Mind. University of Chicago Press. 
+
+Landin, Peter. (1965) "A Correspondence Between Algol 60 and Church's Lambda 
+Notation." Communications of the ACM S, no. 2:89-101. 
+
+Lang, Kevin J., and Barak A. Perlmutter. (1988) "Oaklisp: An Object-Oriented 
+Dialect of Scheme." Lisp and Symbolic Computing 1:39-51. 
+
+Langacker, Ronald W. (1967) Language and its Structure. Harcourt, Brace & World. 
+
+Lassez, J.-L., M. J. Maher, and K. Marriott. (1988) "Unification Revisited." In Foundations 
+of Deductive Databases and Logic Programming, ed. J. Minker, 587-625. 
+Morgan Kaufmann. 
+
+Lee, Kai-Fu, and Sanjoy Mahajan. (1986) "Bill: A Table-Based, Knowledge-Intensive 
+Othello Program." Technical Report CMU-CS-86-141, Carnegie Mellon University. 
+
+
+Lee, Kai-Fu, and Sanjoy Mahajan. (1990) "The Development of a World Class Othello 
+Program." Artificial Intelligence 43:21-36. 
+
+Levesque, Hector. (1986) "Making Believers out of Computers." Artificial Intelligence 
+30:81-108. 
+
+
+<a id='page-910'></a>
+
+Levy, David N. L. (1976) Computer Chess. Batsford. 
+Levy, David N. L. (1988) Computer Games. Springer-Verlag. 
+Levy, David N. L. (1988) Computer Chess Compendium. Springer-Verlag. 
+Levy, David N. L. (1990) Heuristic Programming in Artificial Intelligence: the First 
+
+Computer Olympiad. Ellis Horwood. 
+
+Lloyd, J. W. (1987) Foundations of Logic Programming. Springer-Verlag. 
+Loomis, Lynn. (1974) Calculus. Addison-Wesley. 
+Loveland, D. W. (1987) "Near-Horn Prolog." Proceedings of the Fourth International 
+
+Conference on Logic Programming, 456-469. 
+Luger, George F., and William A. Stubblefield, (1989) Artificial Intelligence and the 
+Design of Expert Systems. Benjamin/Cummings. 
+Maier, David, and David S. Warren. (1988) Computing with Logic. Benjamin/Cummings 
+Marsland, .. .. (1990) "Computer Chess Methods." Entry in Encyclopedia of Artificial 
+Intelligence, ed. Stuart C. Shapiro. Wiley. 
+Martin, William .., and Richard J. Fateman. (1971) "The MACSYMA System." 
+
+Proceedings of the Second Symposium on Symbolic and Algebraic Manipulation, 
+
+59-75, ACM SIGSAM. 
+
+Masinter, Larry, and Peter Deutsch, (1980) "Local Optimization in a Compiler for 
+Stack-Based Lisp Machines." Proceedings of the Lisp and Functional Programming 
+Conference. 
+
+McAllester, David. (1982) "Reasoning Utility Package User's Manual." AI Memo 
+667, AI Lab, MIT. 
+
+McCarthy, John. (1958) "An Algebraic Language for the Manipulation of Symbolic 
+Expressions." AI Lab Memo no. 1, MIT. 
+
+McCarthy, John. (1960) "Recursive functions of symbolic expressions and their 
+computation by machine." Communications of the ACM 3, no 3:184-195. 
+
+McCarthy, John. (1963) "A basis for a mathematical theory of computation." In 
+Computer Programming and Formal Systems, ed. P. Braffort and D. Hirschberg. 
+North-Holland. 
+
+McCarthy, John. (1968) "Programs with Common Sense." In Minsky 1968. Reprinted 
+in Brachman and Levesque 1985. 
+
+
+<a id='page-911'></a>
+
+McCarthy, John. (1978) "History of Lisp." InHistory of Programming Languages, ed. 
+Richard W. Wexelblat. Academic Press. Also in ACM SIGPLAN Notices 13, 
+no. 8. 
+
+McCarthy, John, P. W. Abrahams, D. J. Edwards, P. A. Fox, T. P. Hart, and M. J. Levin. 
+(1962) Lisp 1.5 Programmer's Manual. MIT Press. 
+
+McDermott, Drew. (1978) "Tarskian Semantics, or No Notation without Denotation!" 
+Cognitive Science, 2:277-282. Reprinted in Grosz, Sparck-Jones and 
+Webber 1986. 
+
+McDermott, Drew. (1987) "A Critique of Pure Reason." Computational Intelligence 
+3:151-160. 
+
+Meyer, Bertrand. (1988) Object-oriented Software Construction. Prentice-Hall. 
+
+Michie, Donald. (1968) "Memo Functions and Machine Learning." Nature 218:1922. 
+
+
+Miller, Molly M., and Eric Benson. (1990) Lisp Style & Design. Digital Press. 
+
+Minsky, Marvin. (1968) Semantic Information Processing. MIT Press. 
+
+Miranker, Daniel. (1990) TREAT: A New and Efficient Match Algorithm for AI Production 
+Systems. Pitman. 
+
+Moon, David. (1986) "Object-Oriented Programming with Flavors." Proceedings of 
+the ACM Conference on Object-Oriented Systems, Languages and Applications. 
+
+Moon, David and Richard Stallman and Daniel Weinreb. (1983) The Lisp Machine 
+Manual. AILab, MIT. 
+
+Moore, Robert C. (1982) "The Role of Logic in Knowledge Representation and 
+Commonsense Reasoning." Proceedings oftheAAAI-82. Reprinted in Brachman 
+and Levesque 1985. 
+
+Moses, Joel. (1967) "Symbolic Integration." Report no. MAC-TR-47, Project MAC, 
+MIT 
+
+Moses, Joel. (1975) "A MACSYMA Primer." Mathlab Memo no. 2, Computer Science 
+Lab, MIT. 
+
+Mueller, Robert .., and Rex L. Page. (1988) Symbolic Computing with Lisp and Prolog. 
+Wiley. 
+
+Musser, David R., and Alexander A. Stepanov. (1989) The ADA Generic Library. 
+Springer-Verlag. 
+
+
+<a id='page-912'></a>
+
+Naish, Lee. (1986) Negation and Control in Prolog. Springer-Verlag Lecture Notes in 
+Computer Science 238. 
+
+Newell, Alan, J. C. Shaw, and Herbert A. Simon. (1963) "Chess-Playing Programs 
+and the Problem of Complexity." In Feigenbaum and Feldman 1963,39-70. 
+
+Newell, Alan, and Herbert A. Simon. (1963)" GPS, A Program that Simulates Human 
+Thought." In Feigenbaum and Feldman 1963, 279-293. Reprinted in Allen, 
+Hendler, and Tate 1990. 
+
+Newell, Alan, and Herbert A. Simon, (1972) Human Problem Solving. Prentice-Hall. 
+
+Nilsson, Nils. (1971) Problem-Solving Methods in Artificial Intelligence. McGraw-Hill. 
+
+Norvig, Peter. (1991) "Correcting a Widespread Error in Unification Algorithms." 
+Software Practice and Experience 21, no. 2:231-233. 
+
+Nygaard, Kristen, and Ole-Johan Dahl. (1981) "SIMULA 67." In History of Programming 
+Languages, ed. Richard W. Wexelblat. 
+
+O'Keefe, Richard. (1990) The Craft of Prolog. MIT Press. 
+
+Pearl, Judea. (1984) Heuristics: Intelligent Search Strategies for Computer Problem Solving. 
+Addison-Wesley. 
+
+Pearl, Judea. (1988) Probabilistic Reasoning in Intelligent Systems: Networks of Plausible 
+Inference. Morgan Kaufmann. 
+
+Pearl, Judea. (1989) "Bayesian and Belief-Functions Formalisms for Evidential Reasoning: 
+A Conceptual Analysis." Proceedings, Fifth Israeli Symposium on Artificial 
+Intelligence. Reprinted in Shafer and Pearl 1990. 
+
+Pereira, Fernando C. N., and Stuart M. Shieber. (1987) Prolog and Natural-Language 
+Analysis. Center for the Study of Language and Information, Lecture Notes 
+no. 10. 
+
+Pereira, Fernando C. N., and David H. D. Warren. (1980) "Definite clause grammars 
+for language analysis - a survey of the formalism and a comparison with 
+augmented transition networks." Artificial Intelligence 13:231-278. Reprinted 
+in Grosz et al. 1986. 
+
+Perils, Alan. (1982) "Epigrams on Programming." ACM SIGPLAN Notices 17, no. 9. 
+
+Plaisted, David A. (1988) "Non-Horn Clause Logic Programming Without Contrapositives." 
+Journal of Automated Reasoning 4:287-325. 
+
+Quillian, M. Ross. (1967) "Word Concepts: A Theory of Simulation of Some Basic 
+Semantic Capabilities." Behavioral Science 12:410-430. Reprinted in Brachman 
+and Levesque 1985. 
+
+
+<a id='page-913'></a>
+
+Quirk, Randolph, Sidney Greenbaum, Geoffrey Leech, and Jan Svartik. (1985) A 
+Comprehensive Grammar of the English Language. Longman. 
+Ramsey, Allan, and Rosalind Barrett. (1987) AI in Practice: Examples in Pop-11. Hal-
+stead Press. 
+Rich, Elaine, and Kevin Knight. (1991) Artificial Intelligence. McGraw-Hill. 
+Risch, R. H. (1969) 'The Problem of Integration in Finite Terms." Translations of the 
+A.M.S. 139:167-189. 
+Risch, R. H. (1979) "Algebraic Properties of the Elementary Functions of Analysis." 
+American Journal of Mathematics 101:743-759. 
+Robinson, J. A. (1965) "A Machine-Oriented Logic Based on the Resolution Principle," 
+Journal of the ACM 12, no. 1:23-41. 
+Rosenbloom, Paul S. (1982) "A World-Championship-Level Othello Program." Artificial 
+Intelligence 19:279-320. 
+Roussel, Phillipe. (1975) Prolog: manual de reference et d'utilization. Groupe d'lntelligence 
+Artificielle, Universit&eacute; d'Aix-Marseille. 
+Rowe, Neal. (1988) Artificial Intelligence Through Prolog. Prentice-Hall. 
+Ruf, Erik, and Daniel Weise. (1990) "LogScheme: Integrating Logic Programming 
+into Scheme." Lisp and Symbolic Computation 3, no. 3:245-288. 
+Russell, Stuart. (1985) "The Compleat Guide to MRS." Computer Science Dept. 
+Report no. STAN-CS-85-1080, Stanford University. 
+
+Russell, Stuart, and Eric Wefald. (1989) "On Optimal Game-Tree Search using 
+Rational Meta-Reasoning." Proceedings of the International Joint Conference on 
+Artificial Intelligence, 334-340. 
+
+Sacerdoti, Earl. (1974) "Planning in a Hierarchy of Abstraction Spaces." Artificial 
+Intelligence 5:115-135. Reprinted in Allen, Hendler, and Tate 1990. 
+Sager, Naomi. (1981) Natural Language Information Processing. Addison-Wesley. 
+
+Samuel, A. L. (1959) "Some Studies in Machine Learning Using the Game of Checkers." 
+IBM Journal of Research and Development 3:210-229. Reprinted in Feigenbaum 
+and Feldman 1963. 
+
+Sangal, Rajeev. (1991) Programming Paradigms in Lisp. McGraw Hill. 
+Schank, Roger C, and Kenneth Mark Colby. (1973) Computer Models of Thought and 
+Language. Freeman. 
+
+
+<a id='page-914'></a>
+
+Schank, Roger C, and Christopher Riesbeck. (1981) Inside Computer Understanding. 
+Lawrence Erlbaum. 
+
+Schmolze, J. G., and T. A. Lipkis. (1983) "Classification in the KL-ONE Knowledge 
+Representation System." Proceedings of the Eighth IJCAL 330-332. 
+
+Sedgewick, Robert. {1988) Algorithms. Addison-Wesley. 
+
+Shannon, Claude E. (1950a) "Programming a Digital Computer for Playing Chess." 
+Philosophy Magazine 41:356-375. 
+
+Shannon, Claude E. (1950b) "Automatic Chess Player." Scientific American, Feb., 
+182. 
+
+Shebs, Stan T., and Robert R. Kessler. (1987) "Automatic Design and Implementation 
+of Language Data Types." SIGPLAN 87 Symposium on Interpreters and 
+Interpretive Techniques (ACM SIGPLAN Notices 22, no. 7:26-37. 
+
+Shapiro, Stuart C. (ed.). (1990) Encyclopedia of Artificial Intelligence. Wiley. 
+
+Shafer, Glenn, and Judea Pearl. (1990) Readings in Uncertain Reasoning. Morgan 
+Kaufmann. 
+
+Shell, B. A. (1983) "Power Tools for Programmers." Datamation, Feb., 131-144. 
+
+Shortliffe, Edward H. (1976) Computer-Based Medical Consultation: MYCIN. American 
+Elsevier. 
+
+Shortliffe, Edward H., and Bruce G. Buchanan (1975) "A Model of Inexact reasoning 
+in Medicine." Mathematical Biosciences, 23:351-379. Reprinted in Shafer and 
+Pearl 1990. 
+
+Slade, Richard. (1987) The . Programming Language: A Dialect of Lisp. Prentice Hall. 
+
+Slagle, J. R. (1963) "A heuristic program that solves symbolic integration problems in 
+freshman calculus." InComputers and Thought, ed. Feigenbaum and Feldman, 
+191-203. Also in Journal of the ACM 10:507-520. 
+
+Spiegelhalter, David J. (1986) "A Statistical View of Uncertainty in Expert Systems." 
+In Artificial Intelligence and Statistics, ed. W. Gale. Addison-Wesley. Reprinted 
+in Shafer and Pearl 1990. 
+
+Staples, John, and Peter J. Robinson. (1988) "Efficient Unification of Quantified 
+Terms." Journal of Logic Programming 5:133-149. 
+
+Steele, Guy L., Jr. (1976a) "LAMBDA: The Ultimate Imperative." AI Lab Memo 353, 
+MIT. 
+
+
+<a id='page-915'></a>
+
+Steele, Guy L., Jr. (1976b) "LAMBDA: The Ultimate Declarative." AI Lab Memo 
+379, MIT 
+
+Steele, Guy L., Jr. (1977) "Debunking the 'Expensive Procedure Call' Myth or. Procedure 
+Call Implementations Considered Harmful or, LAMBDA: The Ultimate 
+GOTO." AI Lab Memo 443, MIT 
+
+Steele, Guy L., Jr., (1978) "Rabbit: a Compiler for Scheme (A Study in Compiler 
+Optimization)." AI Lab Technical Report 474, MIT. 
+
+Steele, Guy L. Jr., (1983) "Compiler optimization based on viewing lambda as 
+Rename Plus Goto." In AI: An MIT Perspective, vol. 2. MIT Press. 
+
+Steele, Guy L. Jr., (1984) Common Lisp the Language. Digital Press. 
+
+Steele, Guy L. Jr., (1990) Common Lisp the Language, 2d edition. Digital Press. 
+
+Steele, Guy L., Jr., and Gerald J. Sussman. (1978) "The revised report on Scheme, a 
+dialect of Lisp." AI Lab Memo 452, MIT. 
+
+Steele, Guy L., Jr., and Gerald J. Sussman. (1978) "The art of the interpreter, or the 
+modularity complex (parts zero, one, and two)." AI Lab Memo 453, MIT. 
+
+Steele, Guy L., Jr., and Gerald Jay Sussman. (1979) "Design of LISP-Based Processors 
+or, SCHEME: A Dielectric LISP or. Finite Memories Considered Harmful or, 
+LAMBDA: The Ultimate Opcode." AI Lab Memo 379, MIT. 
+
+Steele, Guy L., Jr., and Gerald J. Sussman. (1980) "Design of a Lisp-Based Processor." 
+Communications of the ACM 23, no. 11:628-645. 
+
+Stefik, Mark, and Daniel G. Bobrow. (1986) "Object-Oriented Programming: Themes 
+and Variations." AI Magazine 6, no. 4. 
+
+Sterling, Leon, and Ehud Shapiro. (1986) The Art of Prolog. MIT Press. 
+
+Sterling, L., A. Bundy, L. Byrd, R. O'Keefe and B. Silver. (1982) "Solving Symbolic 
+Equations with PRESS." In Computer Algebra, Lecture Notes in Computer Science 
+No. 144, ed. J. Calmet, 109-116. Springer-Verlag. Also in Journal of Symbolic 
+Computation 7 (1989):71-84. 
+
+Stickel, Mark. (1988) "A Prolog Technology Theorem Prover: Implementation by an 
+Extended Prolog Compiler." Journal of Automated Reasoning 4:353-380. 
+
+Stoyan, Herbert. (1984) "Early Lisp History." Proceedings of the Lisp and Functional 
+Programming Conference, 299-310. 
+
+Stroustrup, Bjarne. (1986) The C++ Programming Language. Addison-Wesley. 
+
+
+<a id='page-916'></a>
+
+Sussman, Gerald J. (1973) A Computer Model of Skill Acquisition, Elsevier. 
+
+Tanimoto, Steven. (1990) The Elements of Artificial Intelligence using Common Lisp, 
+Computer Science Press. 
+
+Tate, Austin. (1977) "Generating Project Networks." IJCAI-77, Boston. Reprinted 
+in Allen, Hendler, and Tate 1990. 
+
+Tater, Deborah G. (1987) . Programmer's Guide to Common Lisp, Digital Press. 
+
+Thomason, Richmond. (1974) Formal Philosophy-Selected Papers of Richard Montague. 
+Yale University Press. 
+
+Touretzky, David. (1989) Common Lisp: A Gentle Introduction to Symbolic Computation. 
+Benj amin/Cummings. 
+
+Tversky, Amos, and Daniel Kahneman. (1974) "Judgement Under Uncertainty: 
+Heuristics and Biases." Science 185:1124-1131. Reprinted in Shafer and Pearl 
+1990. 
+
+Tversky, Amos, and Daniel Kahneman. (1983) "Extensional Versus Intuitive Reasoning: 
+The Conjunction Fallacy in Probability Judgement." Psychological Review 
+90:29-315. 
+
+Tversky, Amos, and Daniel Kahneman. (1986) "Rational Choices and the Framing 
+of Decisions." Journal of Business 59:S251-S278. Reprinted in Shafer and Pearl 
+1990. 
+
+Ungar, David. (1984) "Generation Scavenging: A Non-Disruptive High Performance 
+Storage Reclamation Algorithm." In Proceedings of the ACM SIGSOFT/ 
+SIGPLAN Software Engineering Symposium on Practical Software Development Environments 
+(Pittsburgh, Pa., April), 157-167. ACM SIGPLAN Notices 19, no. 5. 
+
+van Emden, Maarten H., and Keitaro Yukawa. (1987) "Logic Programming with 
+Equations." Journal of Logic Programming 4:265-288. 
+
+van Melle, W. J. (1980) System Aids in Constructing Consultation Programs. UMI 
+Research Press. 
+
+Van Roy, Peter L., (1990) "Can Logic Programming Execute as Fast as Imperative 
+Programming?" Report UCB/CSD 90/600, University of California, Berkeley. 
+
+Vygotsky, Lev Semenovich. (1962) Thought and Language. MIT Press. 
+
+Waibel, Alex, and Kai-Fu Lee (1991) Readings in Speech Understanding. Morgan 
+Kaufmann. 
+
+
+<a id='page-917'></a>
+
+Waldinger, Richard. (1977) "Achieving Several Goals Simultaneously." In Machine 
+Intelligence 8. Ellis Horwood Limited. 
+
+Walker, Adrian, Michael McCord, John F. Sowa, and Walter G. Wilson. (1990) 
+Knowledge Systems and Prolog. Addison-Wesley. 
+
+Waltz, David I. (1975) "Understanding Line Drawings of Scenes with Shadows." In 
+The Psychology of Computer Vision, ed, Patrick H. Winston. McGraw-Hill. 
+
+Waltz, David I. (1990) "Waltz Filtering." InEncyclopedia of Artificial Intelligence, ed. 
+Stuart C. Shapiro. Wiley. 
+
+Wand, Mitchell. (1980) "Continuation-Based Program Transformation Strategies." 
+Journal of the ACM 27, no. 1:174-180. 
+
+Warren, David H. D. (1974a) "WARPLAN: A System for Generating Plans." Department 
+of Computational Logic Memo 76, AI, Edinburgh University. 
+
+Warren, DavidH. D. (1974b) "ExtractfromAPIC Studies in Data Processing, No. 24." 
+Reprinted in Allen, Hendler, and Tate, 1990. 
+
+Warren, David H. D. (1979) "Prolog on the DECsystem-10." In Expert Systems in the 
+Micro-Electronic Age, ed. Donald Michie. Edinburgh University Press. 
+
+Warren, David H. D. (1983) An abstract Prolog instruction set. Technical Note 309, 
+SRI International. 
+
+Warren, David H. D., L. M. Pereira, and Fernando C. N. Pereira. (1977) "Prolog-the 
+Language and its Implementation Compared with Lisp." Proceedings of the 
+ACM SIGART-SIGPLAN Symposium on AI and Programming Languages. 
+
+Warren, David H. D., and Fernando C. N. Pereira. (1982) "An Efficient Easily Adaptable 
+System for Interpreting Natural Language Queries." American Journal of 
+Computational Linguistics, 8, nos.3-4:110-122. 
+
+Waterman, David A. (1986) A Guide to Expert Systems. Addison-Wesley. 
+
+Waters, Richard C. (1991) "Supporting the Regression Testing of Lisp Programs." 
+Lisp Pointers 4, no. 2:47-53. 
+
+Wegner, Peter. (1987) "Dimensions of object-based language design." ACM SIGPLAN 
+NoHces, 168-182. 
+
+Weinreb, Daniel, and David A. Moon (1980) "Flavors: Message Passing in the Lisp 
+Machine." AI Memo no. 602, Project MAC, MIT. 
+
+Weiss, Sholom M., and Casimar A. Kulikowski. (1984) A Practical Guide to Designing 
+Expert Systems. Rowman & Allanheld. 
+
+Weissman, Clark. (1967) Lisp 1.5 Primer. Dickenson. 
+
+
+<a id='page-918'></a>
+
+Weizenbaum, Joseph. (1966) "ELIZA - A computer program for the study of natural 
+language communication between men and machines." Communications of the 
+ACM 9:36-45. 
+
+Weizenbaum, Joseph. (1976) Computer Power and Human Reason. Freeman. 
+Whorf, Benjamin Lee. (1956) Language, Thought, and Reality. MIT Press. 
+Wilensky, Robert. (1986) Common LISPcraft. Norton. 
+Winograd, Terry. (1983) Language as a Cognitive Process. Addison-Wesley. 
+Winston, Patrick H. (1975) The Psychology of Computer Vision. McGraw-Hill. 
+Winston, Patrick H. {19M) Artificial Intelligence. Addison-Wesley. 
+Winston, Patrick H., and Bertold .. P. Horn. (1988) Lisp, 3d ed. Addison-Wesley. 
+Wirth, N. (1976) Algorithms -f Data Structures = Programs. Prentice Hall. 
+Wong, Douglas. (1981) "Language Comprehension in a Problem Solver." Proceed
+
+
+ings of the International joint Conference on Artificial Intelligence, 7-12. 
+
+Woods, William A. (1970) "Transition Network Grammars for Natural Language 
+Analysis." Communications of the ACM 13:591-606. Reprinted in Grosz et al. 
+1986. 
+
+Woods, William A. (1975) "What's in a Link: Foundations for Semantic Networks." 
+In Representation and Understanding, ed. D. G. Bobrow and A. M. Collins. 
+Academic Press. 
+
+Woods, WilHam A. (1977) "Lunar Rocks on Natural English: Explorations in Natural 
+Language Question Answering." In Linguistic Structures Processing, ed. 
+
+A. Zamponi. Elsevier-North-Holland. 
+Zabih, Ramin, David McAllester, and David Chapman. (1987) "Non-Deterministic 
+Lisp with Dependency-Directed Backtracking." Proceedings oftheAAAI. 
+
+Zadeh, Lotfi. (1978) "Fuzzy Sets as a Basis for a Theory of PossibiUty." Fuzzy Sets 
+Systems, 1:3-28. 
+
+Zucker, S. W. (1990) "Vision, Early." In Encyclopedia of Artificial Intelligence, ed. 
+Stuart C. Shapiro. Wiley. 
+
+
+## Index
+<a id='page-919'></a>
+
+1,420 
+&al1ow-other-keys, 101 
+&aux,102 
+&body, 102 
+&key,98 
+&optional, 98 
+&rest,101 
+0,10 
+*abbrevs*,740 
+*acc*, 848 
+*bigger-grammar*, 43 
+^bindings*, 300 
+*board*, 623,624 
+*citiesM97 
+*clock*, 623,624 
+*db-predicates*,360,361 
+*dbg-ids*, 124 
+*debug-io*,124 
+*depth-incr*,484 
+*depth-max*,484 
+*depth-start*, 484 
+*edge-table*, 639 
+*examples*, 708 
+*grammar*, 657 
+*grammarl*, 657 
+*grammar3*, 657 
+*grammar4*, 661 
+*i nfi x->prefi X-rules*, 249 
+*1 abel-num*, 786,788 
+
+*maze-ops*, 134 
+*move-number*, 623,624 
+*occurs-check*, 356,361 
+*open-categories*,664 
+*ops*, 114,127 
+*package*, 835 
+*pl y-boards*, 623,634 
+*predicate*, 421 
+*primitive-fns*, 786,823 
+*primitives*,489 
+*print-gensym*, 855 
+*print-level*, 379 
+*profi 1ed-functi ons*, 290 
+*readtable*, 821 
+*rules-for*, 297 
+*scheme-procs*,757,759 
+*scheme-readtable*, 821 
+*school-ops*,117 
+*search-cut-off*, 483 
+*simple-grammar*, 39 
+*s i mpl i f i cat i on- rul es*, 243,247,249 
+*standa rd-output*, 124,888 
+*state*,114 
+*static-edge-table*,643 
+*student-rules*, 221 
+*systems*, 892 
+*trail*, 379,391 
+*uncompiled*, 408 
+*uniq-atom-table*, 334 
+
+
+<a id='page-920'></a>
+
+*un1q-cons-table*,334 
+*va.-counter*, 379 
+*vars*,340 
+*weights*,609 
+*world*,498,500 
+,, 68 
+.@, 68 
+-->,690 
+-if, 61 
+-if-not, 61 
+:-,690 
+: LABEL, 819 
+rafter, 447 
+: before, 447 
+: end keywords, 895 
+: ex, 708,744 
+: pass, 394 
+rprint-function, 379,499 
+r sem, 705 
+r test, 128 
+rtest-not,100 
+
+<-, 351,360,361,373,399 
+=,374,395,406,745 
+=/2,414 
+==>,705,707 
+>-num, 894 
+?,379 
+?*,183 
+?+,183 
+?-,361,363,364,373,391 
+??,183,494 
+?and,183 
+? if, 183 
+?is,183 
+?not, 183 
+?or, 183 
+#',14,92 
+#+, 292 
+#-,292 
+#.,340,645 
+#d,822 
+#f, 754,822 
+
+#t, 754,822 
+&rest, 754 
+\+,415 
+^243 
+~&,84 
+-{...-}, 85,230 
+~^85 
+~a,84,230 
+~f,84 
+~r,84 
+~s,84 
+10*N+D,670 
+68000 assembler, 319 
+88->h8,622,623 
+
+A, 660 
+a, 494 
+a*-search, 209 
+A+, 660 
+a-lists, 74 
+Ait-Kaci, Hassan, 385,426,504 
+abbrev, 740 
+abbreviations, 732,739 
+Abelson, Harold, 213,307,367, 
+
+383,511,777,825 
+abstract machine, 810 
+abstraction, 423 
+ABSTRIPS, 147 
+account, 436,445 
+account-deposit,437 
+account - i nterest,437 
+account-wi thdraw,437 
+accumulator, 329,686,698 
+accumulators, 63 
+accusative case, 717 
+achi eve, 114,140 
+achieve-all, 120,128,139 
+achieve-each,139 
+aeons, 50 
+action-p,136 
+Actors, 457 
+Ada, 27,459,837 
+
+
+<a id='page-921'></a>
+
+add-body,843 
+add-clause, 360,361,408 
+add-examples, 709 
+add-fact, 486,490 
+add-noun-form, 742 
+add-test,843 
+add-var, 843 
+add-verb, 742 
+adder, 92 
+Adj, 38 
+adj, 716,731 
+Adj*, 38 
+adjectives, 738 
+adjunct, 716, 719,720,723 
+adjuncts, 718 
+adverb, 716,732 
+adverbial phrase, 723 
+adverbs, 723, 738 
+advp, 716 
+Aho, A. v., 307 
+
+air-distance, 201 
+M, 60,678 
+
+all-directions,601,602 
+all-parses, 675 
+al 1- squares, 602,603,631 
+Allen, James, 748 
+Allen, John, 148, 777,825 
+alpha cutoff, 615 
+alpha-beta, 602,616 
+alpha-beta-searcher,602,616 
+alpha-beta -sea rcher2,623,631 
+alpha-beta-sea rcherS,623,636 
+alpha-beta2,623,631 
+alpha-betas, 623,635 
+always, 832,847 
+Amarel, Saul, 132 
+ambiguity, 669 
+ambi guous-vertex-p,569,570 
+and, 53,415,429,485,764 
+and*/2,708 
+Anderson, John, 655 
+anon-vars-in,433 
+
+anonymous-va ri ables-i .,391, 
+
+400,433 
+antecedent rules, 561 
+any-legal-move?, 602,606 
+append, 11,69,848 
+append-pi pes,285 
+appendl,659 
+applicable-ops,213 
+apply, 18,91 
+apply-op,115,129 
+apply-scorer, 672 
+apply-semantics, 668 
+appropriate-ops,141 
+appropriate-p,114,129 
+apropos, 86,878 
+arch, 587,589,590,593 
+aref, 73 
+arg-count,795,799 
+argl, 812 
+arg2,674,812 
+arg3,812 
+arg/, 795 
+ARGS, 785,805,814,815 
+args, 390,391, 795,812 
+args->prefix, 513,520 
+argument 
+
+keyword, 322,877 
+optional, 322,412,877 
+rest, 322,805 
+
+Aristotle, 111, 147 
+
+arrow (=^), 5 
+
+art, 716,731 
+Article, 36 
+articles, 738 
+as, 845 
+ask-vals,533,539 
+asm-first-pass,795,812 
+asm-second-pass,795,813 
+assemble, 795,812 
+assembler, 805 
+assert,88 
+assert-equal,295 
+
+
+<a id='page-922'></a>
+
+assoc, 73 
+asymptotic complexity, 274 
+atom/1,745 
+attributive adjectives, 749 
+audited-account, 447 
+augmented transition network 
+(ATN), 712 
+AutoLisp, ix 
+aux, 716,731 
+aux-inv-S, 716,727 
+auxiliary verb, 735 
+average, 87 
+
+backquote, 68 
+backquote, 822 
+backtrack points, 420 
+backtrack-points,772 
+backtracking, 349,367,372, 772 
+automatic, 349 
+chronological, 773 
+Backus-Naur Form (BNF), 678 
+backward-chaining, 351,536,543 
+Bacon, Francis, 460 
+bag, 416 
+bagof/3,416 
+bananas, 132 
+bank-account,92 
+Barrett, Rosalind, xv, 594, 748 
+Batali,John, 810 
+Bayes's law, 557 
+Bayesian classification, 652 
+be, 735 
+beam-problem, 452 
+beam-search, 196 
+begin, 754 
+belief functions, 557 
+benchmark, 295,411,522 
+Berkeley, California, 633 
+Berlin, Andrew, 267 
+best-first-search, 194 
+best-problem, 452 
+beta cutoff, 615 
+
+better-path, 210 
+bfs-problem, 450 
+Bill, 597,636,651 
+binary-exp-p,229,242 
+binary-tree,192 
+binary-tree-eql-best-beam-problem, 
+452 
+bi na ry-1 ree-problem, 451 
+bind-new-variables,391,405 
+bind-unbound-vars,391,398 
+bi nd- va r i abl es -1 ., 391,404 
+binding-val,157,391 
+binomial theorem, 524 
+bit, 73 
+bit sequence, 79 
+bit vector, 79 
+black, 601,602 
+block, 65 
+block, 754,767 
+blocks world, 136,211 
+blood test, 558 
+BOA constructor, 221 
+board, 601,602 
+Bobrow, Daniel, 219,234,458 
+body, 351 
+bound-p, 377 
+boundary line, 566 
+Boyer, R. S., 425 
+Brachman, Ronald J., 503 
+bracketing, 675 
+Bratko, Ivan, 383 
+breadth-first-search, 192 
+break, 87 
+bref, 601,602 
+Brooks, Rodney .., 259 
+Brown, Allen, 142 
+Buchanan, Bruce G., 557,558 
+build-cases,276 
+build-code, 276 
+build-exp, 302 
+butlast, 877 
+Butler, Nicholas Murray, 530 
+
+
+<a id='page-923'></a>
+
+byte-code assembly, 811 
+
+C, ix, 837 
+C++, 459 
+cache, 536 
+calculus, 252 
+CALL, 785,811,820 
+call-loop-fn, 844 
+call-next-method, 445 
+call-with-current-continuation, 
+372, 770 
+cal 1/1,414, 745 
+cal 1 /cc, 425, 754, 757, 776, 780,810 
+CALLJ, 814,820 
+Cannon, Howard, 457 
+canon, 513,521 
+canon->prefi ., 513,520 
+canon-si mpl if i er, 513,521 
+canonical simpHfication, 510 
+car, 14,69 
+Carbonell, Jamie, 167 
+cardinal, 716,732 
+Carlyle, Thomas, 175 
+case, 53,764,879 
+case sensitive, 8 
+Cassio, 597 
+Catalan Numbers, 663 
+catch, 623, 769,837 
+catch point, 410 
+categories, 485 
+closed-class, 664 
+open-class, 664 
+category names, 660 
+CC, 810,815 
+cease, 88 
+cdr, 14,69 
+cdr-coding, 522 
+Cerf, Jonathan, 637 
+cerror, 87 
+certainty factors, 532 
+cf->english,533,551 
+cf-and, 533,535 
+
+cf-cut-off, 533,536 
+cf-or, 533,535 
+cf-p, 533,536 
+change a field, 873 
+Chapman, David, 148 
+char, 73 
+char-ready?,756 
+char?, 756 
+Charniak, Eugene, xiii, xv, 345, 383, 
+504, 586,594,823,887 
+chart parsers, 679 
+Chat-80, 711 
+check-condi ti ons,533,549 
+check-di agram, 569,588 
+check-reply,533,540 
+check-type,88 
+checkers, 651 
+Cheeseman, Peter, 558 
+chess, 652 
+choice of names, 888 
+Chomsky, Noam, 655 
+choose-first,773 
+Church, Alonzo, 20 
+Church, Kenneth, 663 
+city, 197,198 
+class, 436 
+variable, 436 
+clause, 350, 723 
+clause,361,716, 724 
+clause-body,360 
+clause-head,360 
+cl auses - wi th-ari ty, 390,391 
+clear-abbrevs,740 
+clear-db, 361,362,533,537 
+clear-dtrees,476 
+clear-examples, 708 
+clear-grammar, 744 
+clear-lexicon,744 
+clear-m-array, 318 
+clear-memoize, 275 
+clear-predi cate,361,362 
+clear-rul es, 533,545 
+
+
+<a id='page-924'></a>
+
+cliche, 60,176 
+dinger, William, 777 
+Clocksin, William R, 382 
+CLOS, xii, 30, 435, 439, 445-446, 448, 
+453-454,456,458-459 
+flaw in, 448 
+closed world assumption, 466 
+closure, 92,457 
+Clowes, Maxwell B., 594 
+clrhash, 74 
+CMULisp, 327 
+coef, 512-514 
+coefficients of a polynomial, 510 
+Coelho, Helder, 147,383 
+Cohen, Jacques, 426,504 
+Colby, Kenneth, 153,167,655 
+collect, 848,863 
+collect-sems, 707 
+collecting,849 
+Collins, Allan, 167 
+Colmerauer, Alain, 382,504, 684, 711 
+combine-a11,45 
+combine-all-pi pes, 286 
+combine-edge-moves, 642 
+combine-quasi quote,824 
+combine-rules, 304 
+command, 725 
+comment, 6 
+common cases, 717 
+Common Lisp, vii-xiv, 4, 7-9,12, 20, 
+24, 25, 27, 29, 30, 48-51, 55, 
+57, 62, 66, 68, 72, 74, 76, 78, 
+79, 81, 82, 84, 85, 88, 91, 93, 
+94,97,98,101-103,106,110, 
+112, 113,115, 120, 122, 155, 
+156, 161,165, 178, 182, 203, 
+245, 246, 266-268, 278, 279, 
+281, 292, 317, 318, 321, 322, 
+330, 346, 372, 411, 419, 435, 
+438, 439, 445, 504, 514, 522, 
+574, 623, 632, 652, 666, 678, 
+753-755, 759, 760, 762, 766, 
+
+767, 769, 771, 774, 780, 783, 
+811, 822, 823, 825, 826, 828, 
+830, 834-840, 843, 852, 853, 
+855, 857, 872, 876, 877, 879, 
+882-885,891,894,895,900 
+CommonLoops, 458 
+commutative-p, 229 
+comp, 786,798 
+comp-begin, 786,787,800 
+comp-const, 795,800 
+comp-funcall,795,803 
+comp-go, 795 
+comp-if, 786,787,801,831 
+comp-lambda, 786,788 
+comp-list,795,800 
+comp-show, 786, 789 
+comp-var, 795,800 
+compact disc player, 665 
+compilation, 526 
+compi1e-a11 -rules - i ndexed,306 
+compi 1 e-arg, 391,395,399,404 
+compile-args,302 
+compi 1 e-body, 391,394,405,422 
+compile-call,391,394 
+compi 1 e- cl ause, 391,394,397,406 
+compile-exp,301 
+compile-file,645 
+compile-if, 391,403 
+compi1e- i ndexed-rule, 304 
+comp i 1 e - . red i ca te, 391,392,397,422 
+compile-rule, 276,300 
+compile-rule-set,304 
+compi 1 e-uni fy, 391,395,402 
+comp i 1 e - un ify- va r i a bl e, 391,403 
+compiled 
+for effect, 792 
+for value, 792 
+compiler, 275,298 
+context-free, 798 
+context-sensitive, 798 
+versus interpreter, 277 
+compiler, 786,788 
+
+
+<a id='page-925'></a>
+
+comp! ement, 101,716,728 
+complements, 718 
+complete-parses, 658 
+compose, 177,217 
+computation on lists, 6 
+computer vision, 565 
+concat, 411,686 
+concave line, 566 
+concl ude, 533,547 
+cond, 53, 764,782,878 
+conj-category, 711 
+conj-rule, 710 
+conjuncts, 708 
+cons, 11,69,328 
+cons cells, 69 
+consistency, 464 
+consistency checker, 90 
+consi stent-1abeli ngs,569,572 
+consp, 69 
+CONST, 785,812,814 
+constants, 889 
+constraint propagation, 568 
+construct-di agram, 569,576 
+construct-vertex, 569,576 
+context, 533,542 
+contexts, 538,541 
+continuation, 300,367 
+continue-p, 369 
+convert-number, 829 
+convert-numbers, 829 
+convert-op,126 
+convex line, 566 
+Cooper, Thomas .., 266 
+copula,735, 744 
+copy-board, 602,603 
+copy-poly,516 
+copy-tree, 76 
+corner-for, 642 
+corner-p,642 
+cost-fn, 452,453 
+Cotta, Jose, 147,383 
+count, 62,848 
+
+count-difference, 602,603 
+count-edge-neighbors,643 
+count-if,60 
+counting, 849 
+create-list-of-equations,224 
+cross-product,622,623 
+cube, 575 
+cube-on-pi ate, 581 
+current-state, 449 
+cut, 420 
+
+D, 660 
+dag, 345 
+Dahl, Ole-Johan, 456 
+data-driven dispatch, 394 
+Davenport, J. H., 259,260,528 
+Davis, Ernest, 503 
+Davis, Lawrence, 652 
+Davis, Randall, 549 
+dbg, 124 
+dbg-indent,124 
+dcg-normal-goal-p, 691 
+dcg-word-list-p, 691 
+de Moivre, 310 
+debug,124 
+debugging, 85 
+decf,56 
+decidability, 464 
+declaration, 875 
+declarative languages, 435 
+declared inline, 869 
+def-attached-fn, 490 
+def-cons-struct,347 
+def-optimizer, 819 
+def - prol og - compi 1 er -macro, 391,395 
+def-scheme-macro,757,763 
+default rules, 561 
+defclass,445 
+defconstant,51,157 
+defcontext, 533,542 
+defdiagram, 569,575,588 
+define, 754,762,764,790 
+
+
+<a id='page-926'></a>
+
+define-class,440 
+defi ne-enumerated-type,654 
+define-setf-method,514,884 
+define-system, 891,893 
+defining enumerated, 652 
+definite clause grammar (DCG), 
+690,711 
+definite integrals, 519 
+defloop, 844,849 
+defmacro, 51,66 
+defmethod, 445,446 
+def package, 836,891 
+defparameter, 15,39,51 
+defparm, 533,541 
+defresource, 337 
+defrule, 277,533,549,886 
+defsetf, 514 
+defstruct, 51 
+defun, 12,51 
+defun*, 327 
+defun-memo, 273 
+defvar, 39,51 
+deg->radians,201 
+degree, 512,513 
+degree of a polynomial, 510 
+DeGroot, A. D., 652 
+del ay, 281,762,765 
+delay decisions, 25 
+delegation, 436,442 
+delete, 62 
+del ete-trie, 344 
+Dempster, 557 
+dense polynomials, 511 
+depth-first-search, 191 
+dequeue,342 
+deref, 378 
+deref-copy, 417,430 
+deref-equal,414 
+deref-exp, 410 
+deriv, 257 
+deriv-divides, 257 
+deriv-poly,513,518 
+
+derivative-divides technique, 252 
+describe, 86,878 
+destructive operations, 328 
+Det, 687-689,693,695,697,701, 
+716, 721 
+determi ne-wi nner,57 
+Deutsch, Peter, 826 
+developing an AI computer program, 
+110 
+dfs-problem, 450 
+diagram, 569,576 
+diff, 194 
+difference between relations and 
+functions, 350 
+difference list, 702 
+diff erentiable field, 528 
+differentiation, 248 
+directed acyclic graph (dag), 345,649 
+disassemble,318 
+disassembled code, 318 
+discrimination net, 345 
+discrimination tree, 472 
+disjunction, 485 
+displace,781 
+display, 804 
+distance, 201 
+distinguish unknown from false, 496 
+ditransitive verbs, 712 
+div, 839 
+divide-factors,255 
+dividing by zero, 233 
+do, 59,852 
+documentation, 87,878 
+documentation string, 12 
+dol ist, 58 
+dotimes, 59 
+dotted pair notation, 69 
+double-float, 320 
+Dowty, David R., 711 
+Doyle, Jon, 504 
+Drosophila melanogaster, 596 
+dtree, 476 
+
+
+<a id='page-927'></a>
+
+dtree-atom-fetch, 479 
+dtree-fetch, 479 
+dtree-index, 477,498 
+Dubois, Didier, 558 
+dynamic extent, 771 
+dynamic typing, 27 
+
+each, 494 
+Earley,Jay,679 
+earth-diameter, 201 
+eat-porridge, 89 
+ecase, 88 
+echo question, 725 
+edge-and-x-1ists, 639 
+edge-index, 639 
+edge-move-probability,642 
+edge-stability, 639 
+Edinburgh Prolog, 425, 690 
+efficiency, 461 
+efficient-pat-match,332,333 
+Eiffel, 455,459,863 
+Elcock, E. W., 504 
+ELIZA, xi, 151-154,159,163-166,168, 
+
+169, 175, 178, 181, 184, 187, 
+
+219-222, 234, 239, 240, 309, 
+
+330,435 
+el iza, 164,177 
+elt, 73 
+Elvis, 536 
+Emanuelson, P., 307 
+empty, 601,602 
+empty-pipe, 282 
+empty-queue-p, 342 
+EMYCIN, xii, 532-534, 536-538, 541, 
+
+543,544,548-550,559-563 
+emycin, 533,548 
+encapsulate information, 448 
+end game, 649 
+end of file, 822 
+enqueue,342 
+ensure-generic-fn,440 
+ensure-generic-function,445 
+
+enumerate, 284 
+enumerated type, 599 
+environment, 758 
+
+global, 758 
+eof, 821 
+eof-object?, 821 
+eq, 72 
+eq?, 756 
+eql, 72 
+eql - problem,450 
+equal, 69,72 
+equal?, 756 
+equal p, 72 
+equiv, 832 
+eqv?, 756 
+Eratosthenes, 285 
+Ernst, G.W., 147 
+error, 838 
+
+handler, 838 
+
+signaling, 838 
+error, 87 
+error in transcribing, 588 
+errors 
+
+handling, 837 
+eval, 91,245 
+eval - condition,533,546 
+evaluable,245 
+evaluation, 24 
+
+lazy, 307 
+
+rule for Lisp, 22 
+even?, 756 
+every, 62 
+examples of rules, 705 
+executing-p, 126 
+exercises 
+
+level of difficulty, xv 
+existentials, 467 
+exit 
+
+nonlocal, 768 
+exp, 242 
+exp-args,242 
+exp-p, 242 
+
+
+<a id='page-928'></a>
+
+expand-pat-match-abbrev, 187 
+expert system, 461,530 
+expert-system shells, 531 
+explanation, 531 
+exponent->prefi X, 513,520 
+exponentiation, 523 
+expression, 5 
+
+derived, 762 
+
+lambda, 21 
+
+rational, 526 
+
+reading and evaluating, 24 
+
+special form, 9,22 
+expressiveness, 461,464 
+extend-bindings,158,159,361 
+extend-env, 757,759 
+extend-parse, 659,668,671,681,682 
+extensibility, 29 
+extent, 93 
+
+fact-present-p,490 
+factorize,254 
+facts, 350 
+fail, 157,361,430,772 
+failure continuations, 425 
+false, 532,533 
+false-p, 533,536 
+fast-time->seconds,292 
+f a st -1 i me-di f f erence, 292 
+Fateman, Richard, 259, 265, 267, 511, 
+
+522,524 
+Fateman, Richard J., 528 
+Feigenbaum, Edward, 460 
+fetch, 478 
+fib, 269 
+Fibonacci, 269 
+Field, A. J., 307 
+Fikes, Richard, 147,503 
+fill pointer, 330 
+fill-loop-template,842 
+filler-gap dependency, 702 
+filter, 285 
+final-value,602 
+
+finally, 852 
+find, 62 
+find-all,101 
+find-all-if, 100 
+find-anywhere,255,391 
+find-bracketing-piece,602,605 
+find-if, 61 
+find-labelings,569,586 
+find-out, 533,545 
+find-path,210 
+find-trie,344 
+find-vertex, 569,573 
+finish-output,895 
+finite verb, 722 
+finite-binary-tree, 193 
+first, 10,69 
+first-class, 27 
+first-match-pos,185 
+first-name, 13,16 
+first-or -nil,658 
+Fischer, Sylvia, 554 
+Fisher, M.J., 504 
+FJUMP, 785,814,820 
+flatten, 165,329,347 
+flavors, 438,457 
+flet, 870 
+
+flexible flow of control, 531 
+float, 320 
+floating-point numbers, 875 
+FN, 815 
+fn, 786,788,790 
+Fodor, Jerry .., 655 
+follow-arc, 344 
+follow-binding,391,404 
+for, 845 
+for-each,756 
+force, 281 
+format, 84,230,739,839 
+
+option, 625 
+format directives, 84 
+FORTRAN, 84,266,267,434,655 
+forward chaining, 351,485 
+
+
+<a id='page-929'></a>
+
+forward pruning, 647 
+four semicolons, 891 
+fourth, 10 
+Fowler, Henry Watson, 715 
+frames, 493 
+Francis, 355 
+FRANZ LISP, ix 
+free-of, 255 
+fresh-line,84 
+Frisbee, 769 
+front, 342 
+f rpoly, 522,528 
+funcall, 91,693,828 
+funcall-if,861 
+function, 79 
+application, 23 
+data-driven, 818 
+destructive, 80,888 
+first-class, 27 
+generic, 322,436,439 
+higher-order, 18,194,839 
+Ust processing, 10 
+new, 92,887 
+properly tail-recursive, 794 
+proving correctness, 227 
+recursive, 523 
+sequence, 852 
+short, 887 
+tail-recursive, 63 
+function, 92,872 
+functional progranuning, 435 
+functionp, 283 
+fuzzy set theory, 461,558 
+
+Gabriel, Richard, 522 
+Galler, B. .., 504 
+game playing, 596 
+garbage collector, 328 
+ephemeral, 330,336 
+generational, 330 
+Gazdar, Richard, 679,748 
+gen, 786,789 
+
+gen-args,795 
+gen-label,786,789 
+gen-set, 786,790,804 
+gen-var, 786,790 
+geni, 795,819 
+generate, 40,41 
+generate-all,45,286 
+generate-tree,44 
+generation scavenging, 336 
+generic function, 436,439 
+generic operations, 811 
+generic-fn-p,440 
+genetic learning, 651 
+gensym, 363 
+get, 894 
+get-abbrev, 740 
+get-binding, 157,361 
+get-cf,533,537 
+get-clauses,360,361 
+get-context-data,533,548 
+get-db, 533,537 
+get-dtree, 476 
+get-examples,708 
+get-fast-time, 292 
+get-gl obal - var, 757,759 
+get-method, 438 
+get-move, 602,607,625 
+get-optimizer, 819 
+get-parm, 533,541 
+get-rul es, 533,545 
+get-trie,344 
+get-vals,533,537 
+get-var, 757,759 
+get-world, 500 
+gethash,74 
+Ginsberg, Matthew L., 214 
+go, 754,837 
+goal-p, 450 
+Goldberg, Adele, 457 
+Goldberg, David E., 652 
+Gordon,, 558 
+goto, 766,768 
+
+
+<a id='page-930'></a>
+
+GPS, xi, 109-121, 123, 125, 127, 129, 
+130,132,133, 135,136,142, 
+143, 145-147, 149, 175, 189, 
+190,211,213,215,239,470 
+GPS, 114,127,130,135 
+gps, 367 
+gps-successors,212 
+grammar 
+context-free, 678 
+context-free phrase-structure, 35, 
+686 
+definite clause (DCG), 690, 711 
+rule, 685 
+unification, 678 
+grandfather, 385 
+graph-search, 206 
+Green, Cordell, 382 
+Greenbaum, Sidney, 748 
+ground, 569,579 
+grundy,312 
+GSET, 785,814,820 
+Guzman, Adolfo, 594 
+GVAR, 785,812,814 
+
+h8->88,622, 623 
+H&ouml;dobler, Steffen, 504 
+Hafner, Carole, 30 
+HALT, 816 
+halting problem, 511 
+handle-conj, 711 handler-case, 178, 
+839 
+Haraldsson, .., 307 
+Harrell, Steve, 457 
+Harris, Zellig S., 749 
+Harrison, P. G., 307 
+Harvey, Wilham D., 214 
+has-variable-p,391,396 
+hash table, 74,296,477 
+Hayes, Patrick, 469 
+head, 351 
+head, 282 
+Heckerman, David, 558 
+
+help-string,538 
+Hendler, James, 148 
+Hennessey, Wade L., xiv, 259,383 
+Hewitt, Carl, 382,457 
+higher-order predications, 485 
+Hoare, C. A. R., 66 
+Hockney, David, 509 
+Hoddinott, P., 504 
+Horn clauses, 684 
+Horn, Bertold, xiv, 213,367,383,777 
+Huddleston, Rodney, 749 
+Huffman, David .., 594 
+Hughes, R.J. M., 307 
+human, 602,607,622 
+hungry monkey, 132 
+hyphen before the p, 755 
+
+lago, 597,652 
+lago, 623,646 
+Iago-eval,623,645 
+IBM 704,14 
+Identity,669 
+idiom, 176 
+if, 16,424, 745, 754,851 
+ignore,391 
+ignore declaration, 410 
+ignore-errors,838 
+imperative programming, 434 
+import,836 
+impossible diagram, 582 
+1mpossible-d1agram-p,570 
+1mposs i ble-vertex-p, 570 
+in-env-p, 786,791 
+in-exp, 228 
+in-integral-table?,258 
+in-package,835,891 
+1nc-profile-t1me, 294 
+incf, 56 
+1nd, 485,490 
+indefinite extent, 771 
+i ndex, 477,481,498 
+index-new-fact, 492 
+
+
+<a id='page-931'></a>
+
+i ndex-rul es, 298 
+indexing, 297,335,526 
+individuals, 485 
+infectious blood disease, 552 
+infinite set, 280 
+infix notation, 240 
+infix->prefix,240,241 
+infix-funcall,667 
+infix-scorer, 674 
+inflection, 722 
+information hiding, 436,454,835 
+Ingalls, Daniel, 457 
+Ingerman, Peter Z., 307 
+inheritance, 436,499 
+data-driven, 443 
+for classes, 444 
+generic, 443 
+multiple, 436,457 
+init-edge-table,640 
+init-scheme-comp, 795,805,816 
+i .i t -s c heme-i. te rp, 757,760 
+i . i t - s c heme- . roc, 757,776 
+initial-board,602,603 
+initially,852 
+inline,293 
+insert-path,210 
+inspect,87 
+inst-name,533,540 
+instance, 436 
+instance variable, 436 
+instrument, 265 
+instrumentation, 268 
+integer,772 
+integer?,756 
+integers, 282,667,674 
+integrals, 252 
+integrate,256 
+i ntegrate-from-table, 258 
+integrating polynomials, 519 
+integration by parts, 260 
+integration-table,257 
+interactive environment, 28 
+
+i nteracti ve-i nterpreter,177, 
+178,216 
+
+INTERLISP, ix 
+
+intern,835 
+internal definition, 779 
+interning, 835 
+i nterp, 757,758,762,767,774 
+interp-begin, 757,775 
+interp-cal 1,757,775 
+
+interpretation 
+declarative, 351 
+procedural, 351 
+interpreter, 275 
+tail-recursive, 766 
+versus compiler, 277 
+intersperse, 520 
+intractable, 461 
+intransitive verbs, 693 
+inv-span, 674 
+inverse-op, 228 
+IPL,110 
+i rev, 412 
+i right, 374 
+i s, 192,203,533,547,795,813 
+is/2,418 
+isolate, 227 
+iter-wide-search, 204 
+
+iterative deepening, 205,482,646 
+iterative widening, 204 
+
+Jackson, Peter, 558 
+Jaf far, Joxan, 504 
+James, Glenn, 239 
+James, Robert, 239 
+
+JUMP, 785,814,820 
+
+k*poly,513,517 
+
+k+poly, 513,516 
+
+Kahneman, Daniel, 558 
+Kay, Alan, 457 
+
+Kay, Martin, 679 
+
+KCL, 428 
+
+Keene, Sonya, 458 
+
+
+<a id='page-932'></a>
+
+Kernighan, .. W., viii 
+keyword, 98 
+killer heuristic, 634 
+Kinski, Natassja, 700 
+KL-ONE, 462,503 
+Kleene star, 37 
+Kleene, Stephen Cole, 38 
+Klier, Peter, 511 
+Knight, Kevin, 383,594 
+knowledge 
+technical compendium, vii 
+knowledge engineer, 548 
+knowledge representation, 461 
+knowledge-based system, 530 
+Knuth, Donald E., 652 
+Korf,R. E., 214 
+Kornfeld, W. .., 504 
+Kowalski, Robert, 382,465 
+Kranz, David, 825 
+Kreutzer, Wolfgang, xv, 213 
+KRYPTON, 503 
+Kulikowski, Casimir .., 558 
+
+label-p, 786,791 
+label 8,762,870 
+labels-for, 569,573 
+lambda, 20 
+lambda, 754,783 
+lambda expression, 21 
+Lang, Kevin J., 458 
+Langacker, Ronand, 655 
+language 
+declarative, 435 
+frame, 462 
+hybrid representation, 462 
+network-based, 462 
+object-oriented, 462 
+procedural, 462 
+Lassez, Jean-Louis, 383,504 
+last, 12,69,884 
+last-name, 12 
+lastl,305, 757, 760 
+
+last2,883 
+Idiff, 877 
+leaping before you look, 121 
+learning, 651 
+Lee, Kai-Fu, 636,637,651 
+Leech, Geoffrey, 748 
+left-recursive rules, 681,705 
+legal-moves, 602,607 
+legal-nodes,623,632 
+legal-p, 602,604 
+len, 455 
+length, 69,370 
+length1, 58 
+length1.1,58 
+length1O, 63 
+length11,63 
+length12,64 
+length2,58 
+lengths,59 
+1ength4,60 
+lengths,60 
+lengths,60 
+length/,60 
+lengths, 61 
+lengthQ,62 
+length=1, 255,276,496,757, 760 
+let,41,764, 782 
+let*,56, 764 
+letrec, 762,765 
+Levesque, Hector J., 503,504 
+Levy, David, 652 
+lexical closure, 92 
+1 exi ca1 - rul es, 658,664 
+lexicon, 732 
+likes/2,389 
+1i mi ted -a ccount, 442,444,446 
+Lincoln, Abraham, 75 
+line-diagram labeling problem, 565 
+linear equations, 234 
+Lipkis, T. .., 503 
+LIPS,376 
+Lisp 
+
+
+<a id='page-933'></a>
+
+evaluation rule for, 22 
+
+lexical rules for, 5 
+Lisp 1.5, 777 
+lisp/2,418 
+list 
+
+association, 73,74,343,476 
+difference, 702 
+processing function, 10 
+property, 74,476 
+
+list, 11,69 
+list*,67, 69 
+list->string, 756 
+list->vector, 756 
+list-ref, 756 
+list-tail,756 
+listl, 804 
+list2,804 
+lists, 804 
+listp, 69 
+
+Lloyd,]. W.,383,415 
+load, 645 
+local maximum, 197 
+logic programming, 435 
+logic puzzle, 373 
+long-distance dependencies, 702 
+lookup, 157,361,896 
+loop, 842,864,878 
+LOOP FOR, 845 
+loop keywords, 844 
+
+data-driven, 844 
+1 oop macro, 840 
+LOOP REPEAT, 845 
+loop-finish,847 
+loop-for-arithmetic, 846 
+loop-unless,851 
+losing-value, 602,613 
+loss, 311,312 
+Loveland, D.W., 504 
+LSET, 785,814,820 
+Luger, George F., 558 
+LVAR, 785,811,814 
+
+machine, 795,814 
+MacLachlan, Rob, 327 
+MACLISP, ix 
+macro, 66,853, 760 
+
+conditional read, 292 
+
+defining, 763 
+
+design, 880 
+macro-expansion, 778 
+MACSYMA, xi, xii, 151, 239, 259, 260, 
+
+297,522,528 
+Mahajan, Sanjoy, 636,651 
+Maher, Michael J., 504 
+Maier, David, 383 
+main variable of a polynomial, 510 
+main-op, 297 
+main-var, 512-514 
+maintenance, 177 
+make-=, 391,394 
+make-anonymous, 391,399 
+make-a ugmented-dcg, 707 
+make-block-ops, 137 
+make-clause, 440 
+make-copy-diagram, 569,577 
+make-dcg, 691 
+make-dcg-body, 692 
+make-empty-nlist,476 
+make-flips,602,605 
+make-instance,445 
+make-maze-op, 134 
+make-maze-ops,134 
+make-move, 602,604 
+make-moves,312 
+make-obsolete, 870 
+make - pa rameters, 391,392 
+make-pipe, 282,283 
+make-poly, 513,514 
+make-predi cate,391,392 
+make-queue,342 
+make-rat,526 
+make-system, 893 
+make-true-list,795 
+make-variable, 225,340 
+
+
+<a id='page-934'></a>
+
+map, 756,771 
+map-edge-n-pieces,640 
+map-i nterp, 757,775 
+map-into,632,857 
+map-path, 204 
+map-pipe,285 
+mapc, 62 
+mapc- retri eve, 480,488 
+mapc-retri eve-i .-world, 501 
+mapcar, 14,62,864 
+maphash, 74 
+mappend, 19,165,171 
+mappend-pipe, 286 
+Marsland, T. .., 652 
+Martin, William, 259,522,528 
+Masinter, Larry, 826 
+mass nouns, 749 
+match-and,184 
+match-if, 186 
+match-is,184 
+match-not,184 
+match-or,184 
+match-var, 332,333 
+match-variable,158 
+matching-ifs,305 
+math-quiz, 97,98 
+matrix-transpose, 569,574 
+max, 420 
+maximize,849 maxi 
+m1ze-di ffe rence,602,608 
+maximizer, 602,608 
+maximizing,849 
+maybe-add, 496,757,760 
+maybe-add-undo-bi ndi ngs,391,398 
+maybe-set-it, 851 
+maybe-temp, 847 
+McAllester, Davie, 504 
+McCarthy, John, 20,248,259,503,652, 
+776, 777 
+McCord, Michael, 711 
+McDermott, Drew, xv, 147, 383, 503, 
+586,594 
+
+McKenzie, Bruce, xv, 213 
+meaning,676 
+meanings,669 
+Meehan, James, xv 
+Mellish, Chris, 382,679,748 
+member, 16,62,327,358,374,745 
+member-equal,129 
+memo, 270,274 
+memoization, 270,296,526,662 
+memoi ze, 271,275,662 
+message, 436 
+metamorphosis grammar, 711 
+metareasoning, 650 
+metavariable, 697 
+method, 436,438 
+method combinations, 458 
+Meyer, Bertrand, 455,459 
+Michie, Donald, 307,652 
+microcode for addition, 811 
+minimax, 612 
+minimax, 602,613 
+minimax-searcher,602,614 
+minimize,849 
+minimizing,849 
+Minsky, Marvin, 234 
+mix-ins, 457 
+mklist, 165 
+mobility, 623,629,637 
+modal auxiliary verbs, 735 
+mod i f i ed- wei ghted - squa res, 602,621 
+modifiers, 718 
+modifiers, 716,719 
+Modula, 27,459 
+monitoring function, 599 
+monotonicity, 464 
+Montague, Richard, 711 
+Moon, David .., 457 
+Moore, J.S., 425 
+Moore, Robert, 466,652 
+Moses, Joel, 239,259 
+most-negati ve-fi xnum, 613 
+most-positive-fixnum, 195 
+
+
+<a id='page-935'></a>
+
+most-pos i ti ve-fi xnum, 613 
+move-ons, 137 
+move-op, 137 
+moves, 311 
+MRS, 504 
+MU-Prolog,383 
+multimethod, 436,458 
+multiple goals, 145 
+multiple values, 96,685 
+mul tiple-value-bind,96,875 
+multiple-value-call,887 
+Musser, David R., 27 
+must-be-number, 771 
+MYCIN, xii, 461,531,532,535,541,542, 
+
+552,553,557-559,903 
+mycin, 533,552 
+
+N, 660 
+N,693 
+Naish, Lee, 383 
+nalist,498 
+nalist-push,499 
+Name, 660 
+Name, 694,701 
+name, 716,731 
+name clashes, 279 
+name!, 786 
+name-of, 601,602 
+named, 852 
+names, 737 
+nconc, 80,848 
+nconcing, 849 
+negate-node,623 
+negate-value,632 
+negated predicates, 496 
+negation, 485 
+negative?,756 
+nei ghbors, 198,602,621 
+neural nets, 651 
+never, 847 
+New Flavors, 458 
+new-account,437 
+
+new-fn, 795 
+new-instance,533,543 
+new-parm, 541 
+new-states, 207 
+new-symbol, 302,391 
+new-tree, 658,666,671 
+Newell, Alan, 109,147,596 
+newer-file-p,894 
+newline, 804 
+next-instr, 795,819 
+next - to - pi ay, 602,606 
+nextto, 374 
+NIL, 821 
+nil,10 
+Nilsson, Nils, 147,214,503 
+nim, 311 
+nintersection,80 
+nl/0,413 
+nlist, 475 
+nlist-list,476 
+nlist-n,476 
+nlist-push, 476 
+no-bindings, 157 
+no-states-p, 449 
+no-unknown, 228 
+node, 623,631 
+noise-word-p, 225 
+nominative case, 717 
+non-Horn clauses, 504 
+NONLIN, 147 
+nonlocal exit, 768 
+nonrestrictive clauses, 750 
+normalize, 518 
+normalize-poly, 513,518 
+Norvig, Peter, 384 
+
+not, 415,424 
+not-numberp,246 
+
+not/1,415 
+
+notation 
+
+0(/(n)),274 
+
+dotted pair, 69 
+
+infix, 240 
+
+
+<a id='page-936'></a>
+
+package prefix, 835 
+prefix, 228,240 
+Noun, 36,695,698,701 
+noun, 716,731,742 
+noun-phrase, 36,38 
+NP,660 
+NP, 687, 688, 692, 694, 698, 701, 703, 
+716,717 
+NP-hard, 146,461 
+NP2,716, 718 
+nreverse,80 
+nset-difference, 80 
+nsubst, 80 
+nth, 69,73 
+NU-Prolog, 383 
+null,69 
+number-and-negation,20 
+number-of-labelings,569,570 
+numberp/1,745 
+numbers-and-negations,20 
+nunion,80 
+Nygaard, Krysten, 456 
+
+O'Keefe, Richard, 383,423 
+object, 3,436 
+object-oriented 
+programming, 434 
+objective case, 717 
+occurs check, 356,471 
+occurs - check, 356,361 
+omniscience, 464 
+once-only, 854 
+one-of, 36,275 
+one-unknown, 229 
+op, 114,126,127 
+op?, 302 
+opcode, 795,812 
+open, 83 
+opening book, 649 
+operator precedence, 240 
+operators -and- i nverses,228 
+opponent, 601,602 
+
+OPS5,266 
+opt-rel-pronoun,721 
+opt-word, 729 
+optimize, 795,818 
+optimize-1,818 
+optimizing arithmetic operations, 793 
+or, 53,415,429,764 
+ORBFT, 825 
+orderings,139 
+ordinal, 716,732 
+Othello, 597 
+Othello 
+bracketing piece, 605 
+cheat, 606 
+corner squares, 608 
+current mobility, 637 
+edge squares, 608 
+edge stability, 637 
+end game, 649 
+legal move, 604 
+mobility, 637 
+plausible move generator, 647 
+potential mobility, 637 
+stable, 643 
+unstable, 643 
+valid move, 604 
+othel 10,605,624 
+semistable, 643 
+othel 10- seri es, 623,626,628 
+outer, 601,602 
+
+P,660 
+p-add-into!,525 
+p-lists, 74 
+package, 754,834,889-890 
+package prefix notation, 835 
+pair?, 756 
+parameter 
+keyword, 98 
+optional, 98 
+order, 889 
+rest, 778 
+
+
+<a id='page-937'></a>
+
+parameter list, 12 
+parm, 533,541 
+parm-type, 533,541 
+PARRY, 153,154,167 
+parse, 658,659,668,671,680,681 
+parse-condition,547 
+parse-lhs, 658 
+parse-loop-body, 844 
+parse-namestring, 877 
+parse-reply,533,540 
+parser, 658,662,680,681 
+partial evaluation, 267 
+partition-if,256 
+Pascal, ix, 26-29,51,55,57,66,98,176, 
+266,434, 623 
+passivize-sense,743 
+passivize-subcat,743 
+password-account,441 
+past participles, 720 
+past tense, 722 
+pat-match, 155,156,158,160,181 
+pat-match-1,332 
+pat-match-abbrev,187 
+path, 200 
+path-states,210 
+Patil, Ramesh, 663 
+pattern matcher, 509 
+pattern matching and unification, 352 
+Pearl, Judea, 558,559,648, 652 
+peephole optimizer, 805,818 
+Pereira, Fernando, 383,426, 711, 748 
+Pereira, Luis, 426 
+Perils, Alan, 3,265,348,866 
+Perlmutter, Barak .., 458 
+permutations, 150 
+permute, 675,680,682 
+permute-vector 1,682 
+Peters, Stanley, 711 
+piece, 601,602 
+piece-stability,644 
+pipe, 281 
+pipe-elt, 282 
+
+pipes, 840 
+place, 55 
+Plaisted, David .., 504 
+PLANNER, 382 
+Plauger, J., viii 
+play-game, 313 
+pi ay-games, 312 
+poiuyt, 582 
+poly, 513,514 
+poly*poly, 513,517 
+poly*$ame, 513,517 
+pol y+, 513,515 
+poly+poly, 513,516 
+poly+same, 513,516 
+poly-, 513,515 
+poly/poly, 529 
+poly^2,523 
+poly^n,513,518,523,524 
+polyhedra, 565 
+polynomial, 512,513 
+polynomials, 510 
+polysemous, 730 
+POP, 785,814 
+pop, 56 
+pop-end,881,882 
+pop-state,449 
+position,62 
+position-if, 60 
+possible worlds, 485,496,497 
+possi bl e-edge-move, 641 
+possi bl e-edge-moves-value,641 
+possible-labelings,569 
+postdeterminers, 721 
+PP,660 
+PP, 38, 716, 720 
+PP*, 38 
+pprint, 839 
+Prade, Henri, 558 
+preconditions, 112 
+precycling, 634 
+predeterminers, 721 
+predicate, 888 
+
+
+<a id='page-938'></a>
+
+calculus, 463 
+equality, 70 
+recognizer, 81 
+predi cate, 360,361 
+predicative adjectives, 749 
+prefer-disjoint, 674 
+prefer-not-si ngleton, 674 
+prefer-subset, 674 
+prefer<,674 
+preferences, 670 
+prefix notation, 4,228,240 
+prefix->canon, 513,515 
+pref ix->inf ix, 229,242,519,520 
+Prep, 38 
+prep, 716,732 
+prepend,192 
+prepositional phrases, 720 
+prepositions, 739 
+prerequisite clobbers siblinggoal, 120, 
+139 
+present participles, 720 
+present tense, 722 
+pretty printing, 839 
+price-is-right,195 
+PRIM, 815 
+prim, 795,804 
+primitive operation, 803 
+primitive-p, 795,804 
+prinl,83 
+princ, 83 
+pri nt-board, 602,603,625 
+pri nt - condi ti on, 533,551 
+pri nt-condi ti ons,533,551 
+pri nt-equati ons, 228,236 
+print-fn, 786,790 
+print-labelings,569,571 
+print-path, 203 
+print-proc, 757,768 
+print-rule, 533,545,551 
+print-sqrt-abs, 771 
+print-table, 771 
+print-vari able,340 
+
+print-vertex, 569,573 
+pri nt-why, 533,552 
+print-world,501 
+priority queue, 459 
+Pro, 660 
+probability theory, 557 
+problem 
+(find item list) failed,874 
+change to function ignored, 869 
+closures don't v^ork, 871 
+deletion didn't take effect, 873 
+leaping before you look, 121 
+line-diagram labling, 565 
+multiple values lost, 874 
+no response, 867 
+prerequisite clobbers siblinggoal, 
+120,139 
+recursive subgoal, 123 
+problem, 449 
+problem-combi ner, 450,452 
+problem-combiner -.around,452 
+problem-successors,451,453 
+proc, 757 
+procedural attachment, 463 
+procedure?, 756 
+profile, 290 
+profile-count,289 
+profile-enter,293 
+profile-exit,293 
+profile-report, 289,294 
+profile-time, 294 
+profilel,289,291 
+profiled-fn, 289,293 
+profiling, 288 
+prog, 767 
+progn, 64 
+programming 
+data-driven, 182 
+functional style, 435,839 
+idioms, 60 
+imperative style, 434 
+in the large, 890 
+
+
+<a id='page-939'></a>
+
+logic, 435 
+object-oriented style, 434 
+procedural style, 434 
+rule-based, 435 
+
+Project MAC, 239 
+
+Prolog, ix, xii, XV, 63, 144, 155, 287, 
+348-351, 355, 356, 358-360, 
+364, 366-368, 371-374, 376, 
+378, 380-382, 384-386, 388, 
+389, 391, 407, 408, 411-413, 
+415-421, 423-428, 431, 435, 
+455, 462, 464-472, 480-482, 
+489, 497, 504, 505, 531, 532, 
+536, 538, 541-544, 684, 685, 
+690, 691, 693, 697, 708, 711713, 
+732, 745 
+
+Prolog II, 355 
+Prolog III, 383 
+pro! og- compi 1 e, 390,391 
+prol og- compi 1 e- symbol s, 391,409 
+prolog-compi1er-macro, 391,395 
+Prolog-In-Lisp, 360,424 
+prompt, 4 
+prompt-and-read,867 
+prompt-and-read-vals,533,539 
+prompt-generator,178 
+pronoun, 716,731 
+pronouns, 736 
+propagate-constrai nts,569,571,590 
+proper-listp,391,396 
+property lists, 74 
+prototypes, 469 
+prove, 361,362,367,368,380,483 
+prove-al 1,361,362,367,380,483 
+punctuation-p,709 
+push, 56 
+put-db, 533,537 
+put-diagram, 576 
+put-first, 623,636 
+put-optimizer, 819 
+put-rule, 533,545 
+put-trie, 344 
+
+Pygmalion, 152 
+
+quasi-q, 795,824 
+quasiquote, 822 
+Quayle, Dan, 735 
+query-bind,482 
+query-user, 677 
+questions, 725, 726 
+queue, 341 
+queue-contents,342 
+queue-nconc, 343 
+Quillian, M. Ross, 503 
+Quirk, Randolph, 748 
+quote, 427, 754 
+quote mark('), 6 
+
+rl5-test, 522 
+Rabbit, 825 
+Ramsey, Allan, xv, 594, 748 
+random-choice,773 
+random-el t, 36,166,276,322,602 
+random-mem, 322 
+random-ordering strategy, 630 
+random-othel1o-seri es,623,627 
+random-strategy,602,607 
+rapid-prototyping, 265 
+rat*rat, 513,529 
+rat+rat, 513,529 
+rat-denominator,513,527 
+rat-numerator,513,527 
+rat/rat, 513,529 
+rational number, 526 
+read, 83 
+
+read-char, 83,895 
+read-eval-print loop, 176,821 
+read-from-string,876 
+
+read-line,83 
+
+read-time-case, 313 
+
+read/1,413 
+reading, 24 
+readtable, 712,821 
+reasoning with uncertainty, 531 
+recursion, 62 
+
+
+<a id='page-940'></a>
+
+recursive,17 
+recursive subgoal, 123 
+REDUCE, 259 
+reduce, 62,860 
+reduce*, 860 
+reduce-list, 862 
+reduce-vect, 860 
+referential transparency, 423,856 
+regression testing, 90 
+rej ect - premi se, 533,547 
+rel, 485,491 
+rel -cl ause, 698,701,703,716,720 
+rel-pro, 716 
+relation-arity,390,391 
+relations, 485 
+relative clauses, 720 
+remhash, 74 
+remove, 61,62 
+remove-if, 61 
+remove - i f- not, 61,100 
+remove-punctuation,709 
+remq, 334 
+rename-vari abl es, 361,363 
+repeat, 423,674,845 
+repeat/0,423 
+repeat/fail loop, 423 
+replace, 624,634 
+repl a ce -?- va rs, 373,496,870,871 
+report-fi ndi ngs,533,550 
+representation 
+boxed, 317 
+knowledge, 461 
+printed, 52 
+unboxed, 317 
+reset, 773 
+resource, 336 
+rest, 10,69 
+restrictive clauses, 750 
+ret-addr, 795,813 
+retrieve, 480,488 
+retrieve-bagof, 489 
+retrieve-bagof-in-world, 501 
+
+retri eve-conjuncti on,487 
+retrieve-fact,487 
+retri eve-i .-world, 501 
+retrieve-matches, 480 
+retrieve-setof,489 
+RETURN, 785,798,814,816,820 
+return, 65,754,852 
+return-from, 837 
+return-if,847 
+reuse-cons,333,361 
+rev, 411 
+rev-funcal1,674 
+rev-scorer,674 
+reverse, 69,411 
+reverse-1abel, 569,573 
+Reversi, 597 
+Rich, Elaine, 594 
+Riesbeck, Christopher, xv 
+RISC, 811 
+Risch,R., 239,528,260 
+Robinson, J. .., 382 
+Robinson, Peter J., 504 
+robotics, 564 
+Rose, Brian, 637 
+Rosenbloom, Paul, 637,645,652 
+round-robin, 623,628 
+Roussel, Jacqueline, 382 
+Ruf, Erik, 777 
+rul e, 242,533,545,658,666,671,690 
+rule-based programming, 435 
+rule-based translation, 509 
+rule-based translator, 224 
+
+rule-based-translator,189 
+rule-Ihs, 275 
+rule-pattern,163 
+rule-responses, 163 
+rule-rhs, 275 
+rules, 350 
+examples, 705 
+left-recursive, 705 
+rul es-for, 298,682 
+rules-sta rti ng-wi th, 658 
+
+
+<a id='page-941'></a>
+
+run-attached-fn, 490 
+run-examples, 709 
+run-prolog, 391,409 
+Russell, Bertrand, 20 
+Russell, Steve, 777 
+Russell, Stuart, 504,650 
+
+S, 660 
+S, 686-688,692,699,701,703,716,725, 
+
+726 
+Sacerdoti, Earl, 147 
+Sager, Naomi, 749 
+SAINT, 239,259 
+same-shape-tree, 76 
+Samuel, A. L., 651 
+Sangal, Rajeev, xiv 
+satisficing, 146 
+satisfy-premises,533,546 
+SAVE, 814 
+sbit, 73 
+Schank, Roger C, 655 
+Scheme, ix, xii, 63, 91, 280, 372, 425, 
+
+753, 755-757, 759-760, 763
+
+
+764, 766-768, 770-774, 776
+
+
+780, 790, 795, 799, 810-811, 
+
+816, 821-830, 833, 836, 856, 
+
+879,882,888 
+
+spelling conventions, 755 
+
+. dialect, 825 
+scheme, 757, 760, 774, 795 
+scheme-macro, 757,763 
+scheme-macro-expand,757,763 
+scheme-read, 822 
+scheme-top-level,816 
+
+Schmolze, J.G., 503 
+scope, 93 
+search, 140,572 
+
+A*, 208,459 
+
+ahead, 610 
+
+aspiration, 648 
+
+beam, 195 
+
+best-first, 194 
+
+breadth-first, 192,544 
+
+brute-force, 620 
+
+degrades gracefully, 647 
+
+depth-first, 191,544 
+
+heuristic, 204 
+
+hill-climbing, 197,651 
+
+ply, 610 
+
+tools, 448 
+
+zero-window, 648 
+search-all,211 
+search-gps, 212 
+search-n,218 
+search-solutions, 569,572 
+searcher, 449 
+searcher :before,450 
+second, 10,69 
+segment-match,161,162,185 
+segment-match+, 186 
+segment-match-fn,183 
+segment-match?, 186 
+segment-matcher, 183 
+segment-pattern-p,183 
+self-and-double,19 
+sem, 674 
+semantics, 656 
+semipredicates, 127 
+semi-stable,643 
+send, 438 
+sentence,36 
+seq, 786, 789 
+series facility, 840 
+set, 346 
+set, 95 
+set!, 754,756 
+set-bindingl,378,379 
+set-carl, 756 
+SET-CC, 810,815 
+set-diff, 670 
+set-difference, 895 
+set-global-var!,757,759 
+set-macro-character, 714 
+set-simp-fn, 252 
+
+
+<a id='page-942'></a>
+
+set-varl,757,759 
+set-worid-current, 500 
+setf, 8,55,514 
+methods, 514 
+setof/3,417 
+seven name spaces, 836 
+shadow, 825,836 
+Shafer, Glenn, 557,559 
+Shakespeare, William, 597 
+Shannon, Claude E., 652 
+Shapiro, Ehud, 382 
+Shapiro, Stuart, 213 
+Shaw, George Bernard, 315 
+Shaw,J. C, 596 
+Shieber, Stuart, 383, 711,748 
+Shortliffe, Edward H., 531,553, 
+557,558 
+show-city-path,203 
+show-diagram, 569,574 
+show-fn, 786,791,813 
+show-prolog-soluti ons,361,365 
+show-prolog-vars, 361,365,369,484 
+show-prolog-vars/2,410 
+show-vertex, 569,573 
+side effect, 802,886 
+side-effect-free-p,855 
+sieve, 285 
+Simon, Herbert, 109,146,147,596 
+simp, 244 
+simp-fn,252 
+simp-rule, 246 
+s i mpl e- a r ray, 321,876 
+simple-equal,155 
+simple-vector, 321,876 
+simplifier, 244 
+simplify, 244 
+simpl1fy-by-fn,252 
+simpl i fy-exp, 244,252,297,306 
+Simula, 456 
+SIN, 239,259 
+single-float,320 
+single-matcher,183 
+
+single-pattern-p,183 
+Skolem constant, 467,485,493 
+Skolem function, 467 
+Skolem, Thoralf, 467 
+Slagle, James, 239,259 
+slot-constituent,728 
+slot-number, 743 
+Smalltalk, 457 
+Software Tools in Pascal viii 
+solve, 226 
+solve-arithmetic,229 
+some, 62 
+sort, 69 
+sort*, 312 
+sort-vector, 826 
+sorter, 194,217 
+span-length,674 
+sparse polynomials, 511 
+special,837 
+special form, 9 
+expression, 9,22 
+operator, 9 
+spelling corrector, 560 
+sqrt, 885 
+stack, 56 
+STANDARD LISP, ix 
+Staples, John, 504 
+starts-with, 126,317 
+state space, 190 
+statements, 5 
+static-edge-stability,644 
+static-ordering strategy, 631 
+Steele, Guy L., Jr., xiii, 48, 457, 777, 
+781,810,825 
+Stefik, Mark, 458 
+step, 85 
+step-daughter, 385 
+Stepanov, Alexander .., 27 
+Sterling, Leon, 234,382 
+Steve's Ice Cream, 457 
+Stickel, Mark, 426,504 
+storage management, 25 
+
+
+<a id='page-943'></a>
+
+strategy 
+generate-and-test, 376 
+random-ordering, 630 
+static-ordering, 631 
+
+stream, 281 
+string->list, 709 
+string-set!,756 
+strings, 22 
+strip-vowel, 743 
+STRIPS, 112 
+Stroustrup, Bjarne, 459 
+structure sharing, 425 
+Stubblefield, William .., 558 
+student,224 
+sub, 485,491 
+subcategories, 693 
+subject, 716, 724 
+subject-predicate agreement, 724 
+subjective case, 717 
+subl is, 156,356 
+subseq, 69,895 
+subst, 68, 76,333 
+subst-bindings,357,361 
+substances, 469 
+substitute,62 
+subtypep,82 
+
+success continuation, 389,425 
+successors,203 
+sum, 674,849 
+sum-squares,316 
+summing, 849 
+Sussman Anomaly, 142 
+Sussman, Gerald, 142, 213, 307, 367, 
+
+383,511, 777, 781,810,825 
+Svartik,Jan,748 
+svref, 73,512 
+switch-strategies,602,623,627 
+swi tch-vi ewpoi nt, 165 
+symbol, 23 
+
+external, 835 
+internal, 835 
+uninterned, 855 
+
+symbol, 302,391,623 
+symbol-pi ist, 75 
+symbol-value, 94 
+symbolic differentiation, 249 
+Symbolics, 458 
+syntax, 656 
+
+frame-based, 485 
+uniform, 28 
+sys-action, 893 
+
+T, 820 
+table, 343 
+tag bits, 811 
+tagbody, 767,837 
+tai 1,282,284 
+tail-recursive, 766 
+tail-recursive call, 323 
+Tanimoto, Steven, 259,594 
+target, 795,819 
+Tatar, Deborah G,, xiv 
+Tate, Austin, 147,148 
+tax-bracket,54 
+tconc, 341,342 
+Teiresias, 549 
+tense, 722 
+tense-sem, 731 
+terminal-tree-p,668 
+terpri,84 
+test-bears,492 
+test-ex, 90 
+test-index, 477 
+test-it,295 
+test-unknown-word,745 
+the, 512 
+thematic fronting, 725 
+theorem proving, 460 
+thereis,847 
+think-ahead, 649 
+third, 10,69 
+Thomason, Rich, 711 
+Thoreau, Henry David, 238 
+throw, 624, 754,769,837 
+
+
+<a id='page-944'></a>
+
+thunks, 307 
+TI Explorer Lisp Machine, 292,321 
+TI Lisp Machine, 858 
+time, 90 
+time-string, 623,626 
+TJUMP, 785,814,820 
+tone language, 755 
+top, 813 
+top-down parser, 679 
+top-edge,640 
+top-level - prove, 361, 364, 368, 391, 
+409,484 
+
+Touretzky, David, x, xiv 
+tower, 584 
+trace, 16 
+tracing, 427 
+tracing, 16 
+tractability, 464 
+transitive verbs, 693 
+translate-exp,495 
+translate-pair,224 
+translate-to-expression,224 
+tree, 76,649 
+tree, 666,671 
+tree -equal,76 
+tree -lhs,658 
+tree -rhs,658 
+tree-score-or-O, 673 
+tree -search, 191,217 
+trie, 343,472 
+trie, 344 
+trie-deleted,344 
+trihedral vertices, 565 
+trip, 199,200 
+trip-problem,453 
+true, 76,430,532,533 
+true-p, 533,536 
+truly amazing, wonderful thing, 771 
+truth maintenance system (TMS), 
+
+497,504 
+assumption-based (ATMS), 504 
+try, 744 
+
+try-dcg,744 
+Tversky, Amos, 558 
+TWEAK, 148 
+Twenty Questions, 80 
+two-dimensional array, 599 
+type declaration, 876 
+type-checking, 316 
+type-of, 82 
+typep, 82 
+
+uappend, 335 
+ucons, 334 
+ulist, 335 
+Ullman,J. D., 307 
+unbound, 377 
+unbound-var-p,418 
+uncertainty, 464 
+undebug, 124 
+undo-bindings!, 379,397 
+unfactorize, 254 
+unification, 349,352, 684 
+and pattern matching, 352 
+unifier, 35

@@ -1,0 +1,4372 @@
+* Conectness. Correctness is usually achieved in two stages: correctness of 
+individual modules and correctness of the whole system. The object-oriented 
+approach makes it easier to prove correctness for modules, since they are 
+clearly defined, and it may make it easier to analyze interactions between 
+modules, since the interface is strictly limited. CLOS does not provide for 
+information-hiding the way other systems do. 
+* Robustness. Generic functions make it possible for a function to accept, at run 
+time, a class of argument that the programmer did not anticipate at compile 
+time. This is particularly true in CLOS, because multiple inheritance makes it 
+feasible to write default methods that can be used by a wide range of classes. 
+* Extendability. Object-oriented systems with inheritance make it easy to define 
+new classes that are slight variants on existing ones. Again, CLOS's multiple 
+inheritance makes extensions even easier than in single-inheritance systems. 
+* Reusability. This is the area where the object-oriented style makes the biggest 
+contribution. Instead of writing each new program from scratch, object-
+oriented programmers can look over a library of classes, and either reuse 
+existing classes as is, or specialize an existing class through inheritance. Large 
+libraries of CLOS classes have not emerged yet. Perhaps they will when the 
+language is more established. 
+* Compatibility. The more programs use standard components, the more they will 
+be able to communicate with each other. Thus, an object-oriented program will 
+probably be compatible with other programs developed from the same library 
+of classes. 
+13.11 History and References 
+The first object-oriented language was Simula, which was designed by Ole-Johan 
+Dahl and Krysten Nygaard (1966, Nygaard and Dahl 1981) as an extension of Algol 60. 
+It is still in use today, mostly in Norway and Sweden. Simula provides the ability to 
+define classes with single inheritance. Methods can be inherited from a superclass 
+or overridden by a subclass. It also provides coroutines, class instances that execute 
+continuously, saving local state in instance variables but periodically pausing to let 
+other coroutines run. Although Simula is a general-purpose language, it provides 
+special support for simulation, as the name implies. The built-in class simul ation 
+allows a programmer to keep track of simulated time while running a set of processes 
+as coroutines. 
+
+
+<a id='page-457'></a>
+In 1969 Alan Kay was a graduate student at the University of Utah. He became 
+aware of Simula and realized that the object-oriented style was well suited to his 
+research in graphics (Kay 1969). A few years later, at Xerox, he joined with Adele 
+Goldberg and Daniel Ingalls to develop the Smalltalk language (see Goldberg and 
+Robinson 1983). While Simula can be viewed as an attempt to add object-oriented 
+features to strongly typed Algol 60, Smalltalk can be seen as an attempt to use the 
+dynamic, loosely typed features of Lisp, but with methods and objects replacing 
+functions and s-expressions. In Simula, objects existed alongside traditional data 
+types like numbers and strings; in Smalltalk, every datum is an object. This gave 
+Smalltalk the feel of an integrated Lisp environment, where the user can inspect, copy, 
+or edit any part of the environment. In fact, it was not the object-oriented features of 
+Smalltalk per se that have made a lasting impression but rather the then-innovative 
+idea that every user would have a large graphical display and could interact with the 
+system using a mouse and menus rather than by typing commands. 
+
+Guy Steele's LAMBDA: The Ultimate Declarative (1976a and b) was perhaps the 
+first paper to demonstrate how object-oriented programming can be done in Lisp. As 
+the title suggests, it was all done using 1 ambda, in a similar way to our def i ne-cl ass 
+example. Steele summarized the approach with the equation "Actors = Closures 
+(mod Syntax)," refering to Carl Hewitt's "Actors" object-oriented formalism. 
+
+In 1979, the MIT Lisp Machine group developed the Flavors system based on this 
+approach but offering considerable extensions (Cannon 1980, Weinreb 1980, Moon 
+et al. 1983). "Flavor" was a popular jargon word for "type" or "kind" at MIT, so it was 
+natural that it became the term for what we call classes. 
+
+The Flavor system was the first to support multiple inheritance. Other languages 
+shunned multiple inheritance because it was too dynamic. With single inheritance, 
+each instance variable and method could be assigned a unique offset number, and 
+looking up a variable or method was therefore trivial. But with multiple inheritance, 
+these computations had to be done at run time. The Lisp tradition enabled programmers 
+to accept this dynamic computation, when other languages would not. 
+Once it was accepted, the MIT group soon came to embrace it. They developed 
+complex protocols for combining different flavors into new ones. The concept of 
+mix-ins was developed by programmers who frequented Steve's Ice Cream parlor in 
+nearby Davis Square. Steve's offered a list of ice cream flavors every day but also 
+offered to create new flavors—dynamically—by mixing in various cookies, candies, 
+or fruit, at the request of the individual customer. For example, Steve's did not have 
+chocolate-chip ice cream on the menu, but you could always order vanilla ice cream 
+with chocolate chips mixed in.^ 
+
+This kind of "flavor hacking" appealed to the MIT Lisp Machine group, who 
+
+^Flavor fans will be happy to know that Steve's Ice Cream is now sold nationally in the 
+United States. Alas, it is not possible to create flavors dynamically. Also, be warned that 
+Steve's was bought out by his Teal Square rival, Joey's. The original Steve retired from the 
+business for years, then came back with a new line of stores under his last name, Harrell. 
+
+
+<a id='page-458'></a>
+
+adopted the metaphor for their object-oriented programming system. All flavors 
+inherited from the top-most flavor in the hierarchy: vanilla. In the window system, for 
+example, the flavor basi c-wi ndow was defined to support the minimal functionality 
+of all windows, and then new flavors of window were defined by combining mix-in 
+flavors such as scroll -bar-mixin, label -mixin, and border-mixin. These mix-in 
+flavors were used only to define other flavors. Just as you couldn't go into Steve's and 
+order "crushed Heath bars, hold the ice cream," there was a mechanism to prohibit 
+instantiation of mix-ins. 
+
+A complicated repetoire of method combinations was developed. The default 
+method combination on Flavors was similar to CLOS: first do all the : before methods, 
+then the most specific primary method, then the : after methods. But it was 
+possible to combine methods in other ways as well. For example, consider the 
+i ns i de - wi dth method, which returns the width in pixels of the usuable portion of a 
+window. A programmer could specify that the combined method for i nsi de-wi dth 
+was to be computed by calling all applicable methods and summing them. Then an 
+inside-width method for the basic-window flavor would be defined to return the 
+width of the full window, and each mix-in would have a simple method to say how 
+much of the width it consumed. For example, if borders are 8 pixels wide and scroll 
+bars are 12 pixels wide, then the i nsi de-wi dth method for border-mi xi . returns -8 
+andscroll -bar-mixinreturns -12. Thenany window, no matter how many mix-ins 
+it is composed of, automatically computes the proper inside width. 
+
+In 1981, Symbolics came out with a more efficient implementation of Flavors. 
+Objects were no longer just closures. They were still funcallable, but there was 
+additional hardware support that distinguished them from other functions. After a 
+few years Symbolics abandoned the (send object message) syntax in favor of a new 
+syntax based on generic functions. This system was known as New Flavors. It had a 
+strong influence on the eventual CLOS design. 
+
+The other strong influence on CLOS was the CommonLoops system developed 
+at Xerox PARC. (See Bobrow 1982, Bobrow et al. 1986, Stefik and Bobrow 1986.) 
+CommonLoops continued the New Flavors trend away from message passing by 
+introducing multimethods: methods that specialize on more than one argument. 
+
+As of summer 1991, CLOS itself is in a state of limbo. It was legitimitized by its 
+appearance in Common Lisp the Language, 2d edition, but it is not yet official, and an 
+important part, the metaobject protocol, is not yet complete. A tutorial on CLOS is 
+Keenel989. 
+
+We have seen how easy it is to build an object-oriented system on top of Lisp, 
+using 1 ambda as the primary tool. An interesting alternative is to build Lisp on top of 
+an object-oriented system. That is the approach taken in the Oaklisp system of Lang 
+and Perlmutter (1988). Instead of defining methods using 1 ambda as the primitive, 
+OakHsp has add-method as a primitive and defines 1 ambda as a macro that adds a 
+method to an anonymous, empty operation. 
+
+Of course, object-oriented systems are thriving outside the Lisp world. With the 
+
+
+<a id='page-459'></a>
+
+success of UNIX-based workstations, C has become one of the most widely available 
+programming languages. C is a fairly low-level language, so there have been several 
+attempts to use it as a kind of portable assembly language. The most succesful of 
+these attempts is C++, a language developed by Bjarne Stroustrup of AT&T Bell Labs 
+(Stroustrup 1986). C++ provides a number of extensions, including the ability to 
+define classes. However, as an add-on to an existing language, it does not provide as 
+many features as the other languages discussed here. Crucially, it does not provide 
+garbage collection, nor does it support fully generic functions. 
+
+Eiffel (Meyer 1988) is an attempt to define an object-oriented system from the 
+ground up rather than tacking it on to an existing language. Eiffel supports multiple 
+inheritance and garbage collection and a limited amount of dynamic dispatching. 
+
+So-called modern languages like Ada and Modula support information-hiding 
+through generic functions and classes, but they do not provide inheritance, and thus 
+can not be classified as true object-oriented languages. 
+
+Despite these other languages, the Lisp-based object-oriented systems are the 
+only ones since Smalltalk to introduce important new concepts: multiple inheritance 
+and method combination from Flavors, and multimethods from CommonLoops. 
+
+13.12 Exercises 
+&#9635; Exercise 13.3 [m] Implement deposit and interest methods for the account class 
+using CLOS. 
+
+&#9635; Exercise 13.4 [m] Implement the password-account class using CLOS. Can it be 
+done as cleanly with inheritance as it was done with delegation? Or should you use 
+delegation within CLOS? 
+
+&#9635; Exercise 13.5 [h] Implement graph searching, search paths, and A* searching as 
+classes in CLOS. 
+
+&#9635; Exercise 13.6 [h] Implement a priority queue to hold the states of a problem. Instead 
+of a list, the probl em-states will be a vector of lists, each initially null. Each 
+new state will have a priority (determined by the generic function priori ty) which 
+must be an integer between zero and the length of the vector, where zero indicates the 
+highest priority. A new state with priority . is pushed onto element . of the vector, 
+and the state to be explored next is the first state in the first nonempty position. As 
+stated in the text, some of the previously defined methods made the unwarranted 
+assumption that probl em-states would always hold a Hst. Change these methods. 
+
+
+## Chapter 14
+<a id='page-460'></a>
+
+Knowledge Representation 
+and Reasoning 
+
+Knowledge itself is power. 
+
+-Francis Bacon (. 561-1626) 
+
+The power resides in the knowledge. 
+
+—Edward Feigenbaum 
+Stanford University Heuristic Programming Project 
+
+Knowledge is Knowledge, and vice versa. 
+
+—Tee shirt 
+Stanford University Heuristic Programming Project 
+
+I
+I
+n the 1960s, much of AI concentrated on search techniques. In particular, a lot of w^ork v^as 
+concerned with theorem proving: stating a problem as a small set of axioms and searching for 
+a proof of the problem. The implicit assumption was that the power resided in the inference 
+mechanism-if we could just find the right search technique, then all our problems would be 
+solved, and all our theorems would be proved. 
+
+
+<a id='page-461'></a>
+
+Starting in the 1970s, this began to change. The theorem-proving approach failed 
+to live up to its promise. AI workers slowly began to realize that they were not going 
+to solve NP-hard problems by conung up with a clever inference algorithm. The 
+general inferencing mechanisms that worked on toy examples just did not scale up 
+when the problem size went into the thousands (or sometimes even into the dozens). 
+
+The expert-system approach offered an alternative. The key to solving hard problems 
+was seen to be the acquisition of special-case rules to break the problem into 
+easier problems. According to Feigenbaum, the lesson learned from expert systems 
+like MYCIN (which we will see in chapter 16) is that the choice of inferencing mechanism 
+is not as important as having the right knowledge. In this view it doesn't 
+matter very much if MYCIN uses forward- or backward-chaining, or if it uses certainty 
+factors, probabilities, or fuzzy set theory. What matters crucially is that we know 
+Pseudomonas is a gram-negative, rod-shaped organism that can infect patients with 
+compromised immune systems. In other words, the key problem is acquiring and 
+representing knowledge. 
+
+While the expert system approach had some successes, it also had failiu-es, and 
+researchers were interested in learning the limits of this new technology and understanding 
+exactly how it works. Many found it troublesome that the meaning of the 
+knowledge used in some systems was never clearly defined. For example, does the 
+assertion (color appl e red) mean that a particular apple is red, that all apples are 
+red, or that some/most apples are red? The field of knowledge representation concentrated 
+on providing clear semantics for such representations, as well as providing 
+algorithms for manipulating the knowledge. Much of the emphasis was on finding a 
+good trade-off between expressiveness and efficiency. An efficient language is one for 
+which all queries (or at least the average query) can be answered quickly. If we want 
+to guarantee that queries will be answered quickly, then we have to limit what can 
+be expressed in the language. 
+
+In the late 1980s, a series of results shed doubt on the hopes of finding an efficient 
+language with any reasonable degree of expressiveness at all. Using mathematical 
+techniques based on worst-case analysis, it was shown that even seemingly trivial 
+languages were intractable—in the worst case, it would take an exponential amount of 
+time to answer a simple query. 
+
+Thus, in the 1990s the emphasis has shifted to knowledge representation and reasoning, 
+a field that encompasses both the expressiveness and efficiency of languages but 
+recognizes that the average case is more important than the worst case. No amount 
+of knowledge can help solve an intractable problem in the worse case, but in practice 
+the worst case rarely occurs. 
+
+
+<a id='page-462'></a>
+
+14.1 A Taxonomy of Representation Languages 
+AI researchers have investigated hundreds of knowledge representation languages, 
+trying to find languages that are convenient, expressive, and efficient. The languages 
+can be classified into four groups, depending on what the basic unit of representation 
+is. Here are the four categories, with some examples: 
+
+* Logical Formulae (Prolog) 
+* Networks (semantic nets, conceptual graphs) 
+* Objects (scripts, frames) 
+* Procedures (Lisp, production systems) 
+We have already dealt with logic-based languages like Prolog. 
+
+Network-based languages can be seen as a syntactic variation on logical languages. 
+A link L between nodes A and . is just another way of expressing the logical relation 
+B), The difference is that network-based languages take their links more 
+seriously: they are intended to be implemented directly by pointers in the computer, 
+and inference is done by traversing these pointers. So placing a link L between A 
+and . not only asserts that L(A, B) is true, but it also says something about how the 
+knowledge base is to be searched. 
+
+Object-oriented languages can also be seen as syntactic variants of predicate calculus. 
+Here is a statement in a typical slot-filler frame language: 
+
+(a person 
+
+(name = Jan) 
+
+(age = 32)) 
+
+This is equivalent to the logical formula: 
+
+3 p: person(p) . name(p,Jan) . age(p,32) 
+
+The frame notation has the advantage of being easier to read, in some people's 
+opinion. However, the frame notation is less expressive. There is no way to say that 
+the person's name is either Jan or John, or that the person's age is not 34. In predicate 
+calculus, of course, such statements can be easily made. 
+
+Finally, procedural languages are to be contrasted with representation languages: 
+procedural languages compute answers without explicit representation of knowledge. 
+
+
+There are also hybrid representation languages that use different methods to 
+encode different kinds of knowledge. The KL-ONE family of languages uses both 
+logical formulae and objects arranged into a network, for example. Many frame 
+
+
+<a id='page-463'></a>
+languages allow procedural attachment, a technique that uses arbitrary procedures to 
+compute values for expressions that are inconvenient or impossible to express in the 
+frame language itself. 
+
+14.2 Predicate Calculus and its Problems 
+So far, many of our representations have been based on predicate calculus, a notation 
+with a distinguished position in AI: it serves as the universal standard by which other 
+representations are defined and evaluated. The previous section gave an example 
+expression from a frame language. The frame language may have many merits in 
+terms of the ease of use of its syntax or the efficiency of its internal representation of 
+data. However, to understand what expressions in the language mean, there must be 
+a clear definition. More often than not, that definition is given in terms of predicate 
+calculus. 
+
+A predicate calculus representation assumes a universe of individuals, with relations 
+and functions on those individuals, and sentences formed by combining 
+relations with the logical connectives and, or, and not. Philosophers and psychologists 
+will argue the question of how appropriate predicate calculus is as a model of 
+human thought, but one point stands clear: predicate calculus is sufficient to represent 
+anything that can be represented in a digital computer. This is easy to show: 
+assuming the computer's memory has . bits, and the equation hi = 1 means that bit 
+i is on, then the entire state of the computer is represented by a conjunction such as: 
+
+(6o = 0) . (6i = 0) . (62 = 1) . ... . {bn = 0) 
+
+Once we can represent a state of the computer, it becomes possible to represent 
+any computer program in predicate calculus as a set of axioms that map one state onto 
+another. Thus, predicate calculus is shown to be asufficientlangaage for representing 
+anything that goes on inside a computer—it can be used as a tool for analyzing any 
+program from the outside. 
+
+This does not prove that predicate calculus is an appropriate tool for all applications. 
+There are good reasons why we may want to represent knowledge in a form 
+that is quite different from predicate calculus, and manipulate the knowledge with 
+procedures that are quite different from logical inference. But we should still be able 
+to describe our system in terms of predicate calculus axioms, and prove theorems 
+about it. To do any less is to be sloppy. For example, we may want to manipulate 
+numbers inside the computer by using the arithmetic instructions that are built into 
+the CPU rather than by manipulating predicate calculus axioms, but when we write 
+a square-root routine, it had better satisfy the axiom: 
+
+y/x = y=^yxy = x 
+
+
+<a id='page-464'></a>
+
+Predicate calculus also serves another purpose: as a tool that can be used by a 
+program rather than on a program. All programs need to manipulate data, and some 
+programs will manipulate data that is considered to be in predicate calculus notation. 
+It is this use that we will be concerned with. 
+
+Predicate calculus makes it easy to start writing down facts about a domain. But 
+the most straightforward version of predicate calculus suffers from a number of 
+serious limitations: 
+
+* Decidability—^ven a set of axioms and a goal, it may be that neither the goal nor 
+its negation can be derived from the axioms. 
+* Tractability—even when a goal is provable, it may take too long to find the proof 
+using the available inferencing mechanisms. 
+* Uncertainty—it can be inconvenient to deal with relations that are probable to a 
+degree but not known to be definitely true or false. 
+* Monotonicity—in pure predicate calculus, once a theorem is proved, it is true 
+forever. But we would like a way to derive tentative theorems that rely on 
+assumptions, and be able to retract them when the assumptions prove false. 
+* Consistency—pure predicate calculus admits no contradictions. If by accident 
+both P and &not;P are derived, then any theorem can be proved. In effect, a single 
+contradiction corrupts the entire data base. 
+* Omniscience—it can be difficult to distinguish what is provable from what should 
+be proved. This can lead to the unfounded assumption that an agent believes 
+all the consequences of the facts it knows. 
+* Expressiveness—the first-order predicate calculus makes it awkward to talk 
+about certain things, such as the relations and propositions of the language 
+itself. 
+The view held predominantly today is that it is best to approach these problems 
+with a dual attack that is both within and outside of predicate calculus. It is considered 
+a good idea to invent new notations to address the problems—both for convenience 
+and to facilitate special-purpose reasoners that are more efficient than a general-
+purpose theorem prover. However, it is also important to define scrupulously the 
+meaning of the new notation in terms of familiar predicate-calculus notation. As 
+Drew McDermott put it, "No notation without denotation!" (1978). 
+
+In this chapter we show how new notations (and their corresponding meanings) 
+can be used to extend an existing representation and reasoning system. Prolog is 
+chosen as the language to extend. This is not meant as an endorsement for Prolog as 
+the ultimate knowledge representation language. Rather, it is meant solely to give us 
+a clear and familiar foundation from which to build. 
+
+
+<a id='page-465'></a>
+14.3 A Logical Language: Prolog 
+Prolog has been proposed as the answer to the problem of programming in logic. Why 
+isn't it accepted as the universal representation language? Probably because Prolog 
+is a compromise between a representation language and a programming language. 
+Given two specifications that are logically equivalent, one can be an efficient Prolog 
+program, while the other is not. Kowalski's famous equation "algonthm = logic + 
+control" expresses the limits of logic alone: logic = algorithm -control Many problems 
+(especially in AI) have large or infinite search spaces, and if Prolog is not given some 
+advice on how to search that space, it will not come up with the answer in any 
+reasonable length of time. 
+
+Prolog's problems fall into three classes. First, in order to make the language 
+efficient, its expressiveness was restricted. It is not possible to assert that a person's 
+name is either Jan or John in Prolog (although it is possible to ask if the person's 
+name is one of those). Similarly, it is not possible to assert that a fact is false; 
+Prolog does not distinguish between false and unknown. Second, Prolog's inference 
+mechanism is neither sound nor complete. Because it does not check for circular 
+unification, it can give incorrect answers, and because it searches depth-first it can 
+miss correct answers. Third, Prolog has no good way of adding control information 
+to the underlying logic, making it inefficient on certain problems. 
+
+14.4 Problems with Prolog's Expressiveness 
+If Prolog is programming in logic, it is not the full predicate logic we are familiar with. 
+The main problem is that Prolog can't express certain kinds of indefinite facts. It can 
+represent definite facts: the capital of Rhode Island is Providence. It can represent 
+conjunctions of facts: the capital of Rhode Island is Providence and the capital of 
+California is Sacramento. But it can not represent disjunctions or negations: that the 
+capital of California is not Los Angeles, or that the capital of New York is either New 
+York City or Albany. We could try this: 
+
+(<- (not (capital LA CA))) 
+(<- (or (capital Albany NY) (capital NYC NY))) 
+
+but note that these last two facts concern the relation not and or, not the relation 
+capital. Thus, they will not be considered when we ask a query about capital. Fortunately, 
+the assertion "Either NYC or Albany is the capital of NY" can be rephrased 
+as two assertions: "Albany is the capital of NY if NYC is not" and "NYC is the capital 
+of NY if Albany is not:" 
+
+
+<a id='page-466'></a>
+
+(<- (capital Albany NY) (not (capital NYC NY))) 
+
+(<- (capital NYC NY) (not (capital Albany NY))) 
+
+Unfortunately, Prolog's not is different from logic's not. When Prolog answers "no" 
+to a query, it means the query cannot be proven from the known facts. If everything 
+is known, then the query must be false, but if there are facts that are not known, the 
+query may in fact be true. This is hardly surprising; we can't expect a program to 
+come up with answers using knowledge it doesn't have. But in this case, it causes 
+problems. Given the previous two clauses and the query (capi tal ?c NY), Prolog 
+will go into an infinite loop. If we remove the first clause, Prolog would fail to prove 
+that Albany is the capital, and hence conclude that NYC is. If we remove the second 
+clause, the opposite conclusion would be drawn. 
+
+The problem is that Prolog equates "not proven" with "false." Prolog makes what 
+is called the closed world assumption—it assumes that it knows everything that is true. 
+The closed world assumption is reasonable for most programs, because the programmer 
+does know all the relevant information. But for knowledge representation in 
+general, we would like a system that does not make the closed world assumption 
+and has three ways to answer a query: "yes," "no," or "unknown." In this example, 
+we would not be able to conclude that the capital of NY is or is not NYC, hence we 
+would not be able to conclude anything about Albany. 
+
+As another example, consider the clauses: 
+
+(<- (damned) (do)) 
+
+(<- (damned) (not (do))) 
+
+With these rules, the query (? (damned)) should logically be answered "yes." 
+Furthermore, it should be possible to conclude (damned) without even investigating 
+if (do) is provable or not. What Prolog does is first try to prove (do). If this succeeds, 
+then (damned) is proved. Either way, Prolog then tries again to prove (do), and this 
+time if the proof fails, then (damned) is proved. So Prolog is doing the same proof 
+twice, when it is unnecessary to do the proof at all. Introducing negation wrecks 
+havoc on the simple Prolog evaluation scheme. It is no longer sufficient to consider 
+a single clause at a time. Rather, multiple clauses must be considered together if we 
+want to derive all the right answers. 
+
+Robert Moore 1982 gives a good example of the power of disjunctive reasoning. 
+His problem concerned three colored blocks, but we will update it to deal with three 
+countries. Suppose that a certain Eastern European country, E, has just decided if it 
+will remain under communist rule or become a democracy, but we do not know the 
+outcome of the decision. . is situated between the democracy D and the communist 
+country C: 
+
+D E C 
+
+
+<a id='page-467'></a>
+
+The question is: Is there a communist country next to a democracy? Moore points 
+out that the answer is "yes," but discovering this requires reasoning by cases. If . is 
+a democracy then it is next to C and the answer is yes. But if . is communist then 
+it is next toD and the answer is still yes. Since those are the only two possibilities, 
+the answer must be yes in any case. Logical reasoning gives us the right answer, but 
+Prolog can not. We can describe the problem with the following seven assertions 
+and one query, but Prolog can not deal with the or in the final assertion. 
+
+(<- (next-to D E)) (<- (next-to . D)) 
+(<- (next-to . .) (<- (next-to C E)) 
+(<- (democracy D)) (<- (communist O) 
+(<- (or (democracy E) (communist E))) 
+
+(?- (next-to ?A ?B) (democracy ?A) (communist ?B)) 
+
+We have seen that Prolog is not very good at representing disjunctions and negations. 
+It also has difficulty representing existentials. Consider the following statement in 
+English, logic, and Prolog: 
+
+Jan likes everyone. 
+
+VX person(x) => likesQan,x) 
+
+(<- (likes Jan ?x) (person ?x)) 
+
+The Prolog translation is faithful. But there is no good translation for "Jan likes 
+someone." The closest we can get is: 
+
+Jan likes someone. 
+
+3 X person(x) => likesQan,x) 
+
+(<- (likes Jan pD) 
+(<- (person pD) 
+
+Here we have invented a new symbol, pi, to represent the unknown person that Jan 
+likes, and have asserted that pi is a person. Notice that pi is a constant, not a variable. 
+This use of a constant to represent a specific but unknown entity is called a Skolem 
+constant, after the logician Thoralf Skolem (1887-1963). The intent is that pi may be 
+equal to some other person that we know about. If we find out that Adrian is the 
+person Jan likes, then in logic we can just add the assertion pi = Adrian. But that does 
+not work in Prolog, because Prolog implicitly uses the unique name assumption—d\\ 
+atoms represent distinct individuals. 
+
+A Skolem constant is really just a special case of a Skolem function - an unknown 
+
+entity that depends on one or more variable. For example, to represent "Everyone 
+
+likes someone" we could use: 
+
+
+<a id='page-468'></a>
+
+Everyone likes someone. 
+
+V 2/ 3 X person(3:) => likes (y, x) 
+
+(<- (likes ?y (p2 ?y))) 
+(<- (person (p2 ?y))) 
+
+Here .2 is a Skolem function that depends on the variable ?y. In other words, 
+everyone likes some person, but not necessarily the same person. 
+
+14.5 Problems with Predicate Calculus's 
+Expressiveness 
+In the previous section we saw that Prolog has traded some expressiveness for 
+efficiency. This section explores the limits of predicate calculus's expressiveness. 
+Suppose we want to assert that lions, tigers, and bears are kinds of animals. In 
+predicate calculus or in Prolog we could write an impHcation for each case: 
+
+(<- (animal ?x) (lion ?x)) 
+(<- (animal ?x) (tiger ?x)) 
+(<- (animal ?x) (bear ?x)) 
+
+These implications allow us to prove that any known lion, tiger, or bear is in fact 
+an animal. However, they do not allow us to answer the question "What kinds of 
+animals are there?" It is not hard to imagine extending Prolog so that the query 
+
+(?- (<- (animal ?x) ?proposition)) 
+
+would be legal. However, this happens not to be valid Prolog, and it is not even 
+valid first-order predicate calculus (or FOPC). In FOPC the variables must range over 
+constants in the language, not over relations or propositions. Higher-order predicate 
+calculus removes this limitation, but it has a more complicated proof theory. 
+
+It is not even clear what the values of ?propos i ti on should be in the query above. 
+Surely (1 ion ?x) would be a valid answer, but so would (animal ?x), (or (tiger 
+?x) (bea r ?x)), and an infinite number of other propositions. Perhaps we should 
+have two types of queries, one that asks about "kinds," and another that asks about 
+propositions. 
+
+There are other questions that we might want to ask about relations. Just as it is 
+useful to declare the types of parameters to a Lisp function, it can be useful to declare 
+the types of the parameters of a relation, and later query those types. For example, 
+we might say that the 1 i kes relation holds between a person and an object. 
+
+In general, a sentence in the predicate calculus that uses a relation or sentence as 
+a term is called a higher-order sentence. There are some quite subtle problems that 
+
+
+<a id='page-469'></a>
+come into play when we start to allow higher-order expressions. Allowing sentences 
+in the calculus to talk about the truth of other sentences can lead to a paradox: is the 
+sentence "This sentence is false" true or false? 
+
+Predicate calculus is defined in terms of a universe of individuals and their 
+properties and relations. Thus it is well suited for a model of the world that picks out 
+individuals and categorizes them - a person here, a building there, a sidewalk between 
+them. But how well does predicate calculus fare in a world of continuous substances? 
+Consider a body of water consisting of an indefinite number of subconstituents that 
+are all water, with some of the water evaporating into the air and rising to form clouds. 
+It is not at all obvious how to define the individuals here. However, Patrick Hayes 
+has shown that when the proper choices are made, predicate calculus can describe 
+this kind of situation quite well. The details are in Hayes 1985. 
+
+The need to define categories is a more difficult problem. Predicate calculus 
+works very well for crisp, mathematical categories: . is a triangle if and only if . is 
+a polygon with three sides. Unfortunately, most categories that humans deal with 
+in everyday life are not defined so rigorously. The category friend refers to someone 
+you have mostly positive feelings for, whom you can usually trust, and so on. This 
+"definition" is not a set of necessary and sufficient conditions but rather is an open-
+ended list of ill-defined qualities that are highly correlated with the category friend. 
+We have a prototype for what an ideal friend should be, but no clear-cut boundaries 
+that separate friend from, say, acquaintance. Furthermore, the boundaries seem to 
+vary from one situation to another: a person you describe as a good friend in your 
+work place might be only an acquaintance in the context of your home life. 
+
+There are versions of predicate calculus that admit quantifiers like "most" in 
+addition to "for all" and "there exists," and there have been attempts to define 
+prototypes and measure distances from them. However, there is no consensus on 
+the way to approach this problem. 
+
+14.6 Problems with Completeness 
+Because Prolog searches depth-first, it can get caught in one branch of the search 
+space and never examine the other branches. This problem can show up, for example, 
+in trying to define a commutative relation, like si bl i ng: 
+
+(<- (sibling lee kim)) 
+(<- (sibling ?x ?y) (sibling ?y ?x)) 
+
+With these clauses, we expect to be able to conclude that Lee is Kim's sibling, and 
+Kim is Lee's. Let's see what happens: 
+
+
+<a id='page-470'></a>
+
+> (?- (sibling ?x ?y)) 
+?X = LEE 
+?Y = KIM; 
+?X = KIM 
+?Y = LEE; 
+?X = LEE 
+?Y = KIM; 
+?X = KIM 
+?Y = LEE. 
+No. 
+
+We get the expected conclusions, but they are deduced repeatedly, because the 
+commutative clause for siblings is applied over and over again. This is annoying, but 
+not critical. Far worse is when we ask (? - (sibling fred ?x)). This query loops 
+forever. Happily, this particular type of example has an easy fix: just introduce two 
+predicates, one for data-base level facts, and one at the level of axioms and queries: 
+
+(<- (sibling-fact lee kim)) 
+(<- (sibling ?x ?y) (sibling-fact ?x ?y)) 
+(<- (sibling ?x ?y) (sibling-fact ?y ?x)) 
+
+Another fix would be to change the interpreter to fail when a repeated goal was detected. 
+This was the approach taken in GPS. However, even if we eliminated repeated 
+goals, Prolog can still get stuck in one branch of a depth-first search. Consider the 
+example: 
+
+(<- (natural 0)) 
+(<- (natural (1-.- ?n)) (natural ?n)) 
+
+These rules define the natural numbers (the non-negative integers). We can use 
+the rules either to confirm queries like (natural (1+ (1->- (1-.- 0)))) or to generate 
+the natural numbers, as in the query (natural ?n). So far, everything is fine. But 
+suppose we wanted to define all the integers. One approach would be this: 
+
+(<- (integer 0)) 
+(<- (integer ?n) (integer (1+ ?n))) 
+(<- (integer a+ ?n)) (integer ?n)) 
+
+These rules say that 0 is an integer, and any . is an integer if . -f 1 is, and . -h 1 is 
+if . is. While these rules are correct in a logical sense, they don't work as a Prolog 
+program. Asking (integer x) will result in an endless series of ever-increasing 
+queries: (integer (1+ x)), (integer (1+ (1+ and so on. Each goal is 
+different, so no check can stop the recursion. 
+
+
+<a id='page-471'></a>
+
+The occurs check may or may not introduce problems into Prolog, depending on 
+your interpretation of infinite trees. Most Prolog systems do not do the occurs check. 
+The reasoning is that unifying a variable with some value is the Prolog equivalent of 
+assigning a value to a variable, and programmers expect such a basic operation to be 
+fast. With the occurs check turned off, it will in fact be fast. With checking on, it 
+takes time proportional to the size of the value, which is deemed unacceptable. 
+
+With occurs checking off, the programmer gets the benefit of fast unification but 
+can run into problems with circular structures. Consider the following clauses: 
+
+(<- (parent ?x (mother-of ?x))) 
+
+(<- (parent ?x (father-of ?x))) 
+
+These clauses say that, for any person, the mother of that person and the father of 
+that person are parents of that person. Now let us ask if there is a person who is his 
+or her own parent: 
+
+> (? (parent ?y ?y)) 
+?Y = [Abort] 
+
+The system has found an answer, where ?y = (mother-of ?y). The answer can't be 
+printed, though, because deref (or subst-bindings in the interpreter) goes into an 
+infinite loop trying to figure out what ?y is. Without the printing, there would be no 
+infinite loop: 
+
+(<- (self-parent) (parent ?y ?y)) 
+
+> (? (self-parent)) 
+
+Yes; 
+
+Yes; 
+
+No. 
+
+The sel f-parent query succeeds twice, once with the mother clause and once with 
+the father clause. Has Prolog done the right thing here? It depends on your interpretation 
+of infinite circular trees. If you accept them as valid objects, then the answer 
+is consistent. If you don't, then leaving out the occurs check makes Prolog unsound: 
+it can come up with incorrect answers. 
+
+The same problem comes up if we ask if there are any sets that include themselves 
+
+as members. The query (member ?set ?set) will succeed, but we will not be able to 
+
+print the value of ?set. 
+
+
+<a id='page-472'></a>
+
+14.7 Problems with Efficiency: Indexing 
+Our Prolog compiler is designed to handle "programlike" predicates - predicates 
+with a small number of rules, perhaps with complex bodies. The compiler does 
+much worse on "tablelike" predicates-predicates with a large number of simple 
+facts. Consider the predicate pb, which encodes phone-book facts in the form: 
+
+(pb (name Jan Doe) (num 415 555 1212)) 
+
+Suppose we have a few thousand entries of this kind. A typical query for this data 
+base would be: 
+
+(pb (name Jan Doe) ?num) 
+
+It would be inefficient to search through the facts linearly, matching each one against 
+the query. It would also be inefficient to recompile the whole pb/2 predicate every 
+time a new entry is added. But that is just what our compiler does. 
+
+The solutions to the three problems - expressiveness, completeness, and index-
+ing-will be considered in reverse order, so that the most difficult one, expressiveness, 
+will come last. 
+
+14.8 A Solution to the Indexing Problem 
+A better solution to the phone-book problem is to index each phone-book entry in 
+some kind of table that makes it easy to add, delete, and retrieve entries. That is what 
+we will do in this section. We will develop an extension of the trie or discrimination 
+tree data structure built in section 10.5 ([page 344](chapter10.md#page-344)). 
+
+Making a discrimination tree for Prolog facts is complicated by the presence of 
+variables in both the facts and the query. Either facts with variables in them will have 
+to be indexed in several places, or queries with variables will have to look in several 
+places, or both. We also have to decide if the discrimination tree itself will handle 
+variable binding, or if it will just return candidate matches which are then checked by 
+some other process. It is not clear what to store in the discrimination tree: copies of 
+the fact, functions that can be passed continuations, or something else. More design 
+choices will come up as we proceed. 
+
+It is difficult to make design choices when we don't know exactly how the system 
+will be used. We don't know what typical facts will look like, nor typical queries. 
+Therefore, we will design a fairly abstract tool, forgetting for the moment that it will 
+be used to index Prolog facts. 
+
+
+<a id='page-473'></a>
+
+We will address the problem of a discrimination tree where both the keys and 
+queries are predicate structures with wild cards. A wild card is a variable, but with 
+the understanding thatjhere is no variable binding; each instance of a variable can 
+match anything. A predicate structure is a list whose first element is a nonvariable 
+symbol. The discrimination tree supports three operations: 
+
+* index &ndash; add a key/value pair to the tree 
+* fetch &ndash; find all values that potentially match a given key 
+* unindex &ndash; remove all key/value pairs that match a given key 
+To appreciate the problems, we need an example. Suppose we have the following 
+six keys to index. For simplicity, the value of each key will be the key itself: 
+
+1 (p a b) 
+
+2 (p a c) 
+
+3 (p a ?x) 
+
+4 (p b c) 
+
+5 (p b (f c)) 
+
+6 (p a (f . ?x)) 
+
+Now assume the query (. ?y c). This should match keys 2, 3, and 4. How could 
+we efficiently arrive at this set? One idea is to list the key/value pairs under every 
+atom that they contain. Thus, all six would be listed under the atom p, while 2, 
+4, and 5 would be listed under the atom c. A unification check could eliminate 5, 
+but we still would be missing 3. Key 3 (and every key with a variable in it) could 
+potentially contain the atom c. So to get the right answers under this approach, 
+we will need to index every key that contains a variable under every atom - not an 
+appealing situation. 
+
+An alternative is to create indices based on both atoms and their position. So now 
+we would be retrieving all the keys that have a c in the second argument position: 2 
+and 4, plus the keys that have a variable as the second argument: 3. This approach 
+seems to work much better, at least for the example shown. To create the index, we 
+essentially superimpose the list structure of all the keys on top of each other, to arrive 
+at one big discrimination tree. At each position in the tree, we create an index of the 
+keys that have either an atom or a variable at that position. Figure 14.1 shows the 
+discrimination tree for the six keys. 
+
+Consider the query (. ?y c). Either the . or the c could be used as an index. 
+The . in the predicate position retrieves all six keys. But the c in the second argument 
+position retrieves only three keys: 2 and 4, which are indexed under c itself, and 3, 
+which is indexed under the variable in that position. 
+
+Now consider the query (. ?y (f ?z)). Again, the . serves as an index to all 
+six keys. The f serves as an index to only three keys: the 5 and 6, which are indexed 
+
+
+<a id='page-474'></a>
+
+. A 
+(.A .) (.A .) 
+(PAC) (PAC) 
+(PA?) (PA?) 
+(PBC) (. A (F.?)) . 
+(.8 (FC)) 
+(. A (F.?)) 
+. 
+(PBC) 
+(. A (F.?)) (. . (FC)) 
+(. . (FC)) (. . (F C)) 
+(PA(F.?) ) 
+. 
+(. . .) 
+C 
+(PAC) 
+(PBC) 
+? 
+(PA?) 
+
+Figure 14.1: Discrimination Tree with Six Keys 
+
+directly under f in that position, and 3, which is indexed under the variable in a 
+position along the path that lead to f. In general, all the keys indexed under variables 
+along the path must be considered. 
+
+The retrieval mechanism can overretrieve. Given the query (. a (f ?x)),the 
+atom . will again retrieve all six keys, the atom a retrieves 1,2,3, and 6, and f again 
+retrieves 5, 6, and 3. So f retrieves the shortest list, and hence it will be used to 
+determine the final result. But key 5 is (. b (f c)), which does not match the query 
+(pa (f?x)). 
+
+We could eliminate this problem by intersecting all the lists instead of just taking 
+the shortest list. It is perhaps feasible to do the intersection using bit vectors, but 
+probably too slow and wasteful of space to do it using lists. Even if we did intersect 
+keys, we would still overretrieve, for two reasons. First, we don't use . i 1 as an index, 
+so we are ignoring the difference between (f ?x) and (f . ?x). Second, we are 
+using wild-card semantics, so the query (. ?x ?x) would retrieve all six keys, when 
+
+
+<a id='page-475'></a>
+it should only retrieve three. Because of these problems, we make a design choice: 
+we will first build a data base retrieval function that retrieves potential matches, and 
+later worry about the unification process that will eliminate mismatches. 
+
+We are ready for a more complete specification of the indexing strategy: 
+
+* The value will be indexed under each non-nil nonvariable atom in the key, with 
+a separate index for each position. For example, given the preceding data base, 
+the atom a in the first argument position would index values 1,2,3, and 6, while 
+the atom b in the second argument position would index value 4 and 5. The 
+atom . in the predicate position would index all six values. 
+In addition, we will maintain a separate index for variables at each position. For 
+example, value 3 would be stored under the index "variable in second argument 
+position." 
+
+* "Position" does not refer solely to the linear position in the top-level list. For 
+example, value 5 would be indexed under atom f in the caaddr position. 
+* It follows that a key with . atoms will be indexed in. different ways. 
+For retrieval, the strategy is: 
+
+* For each non-nil nonvariable atom in the retrieval key, generate a list of possible 
+matches. Choose the shortest such list. 
+* Each list of possible matches will have to be augmented with the values indexed 
+under a variable at every position "above." For example, f in the ca add r position 
+retrieves value 5, but it also must retrieve value 3, because the third key has a 
+variable in the caddr position, and caddr is "above" caaddr. 
+* The discrimination tree may return values that are not valid matches. The 
+purpose of the discrimination tree is to reduce the number of values we will 
+have to unify against, not to determine the exact set of matches. 
+It is important that the retrieval function execute quickly. If it is slow, we might 
+just as well match against every key in the table linearly. Therefore, we will take 
+care to implement each part efficiently. Note that we will have to compare the length 
+of lists to choose the shortest possibility. Of course, it is trivial to compare lengths 
+using length, but length requires traversing the whole list. We can do better if we 
+store the length of the list explicitly. A list with its length will be called an nl1 st. 
+It will be implemented as a cons cell containing the number of elements and a list 
+of the elements themselves. An alternative would be to use extensible vectors with 
+fill pointers. 
+
+
+<a id='page-476'></a>
+
+An nlist is implemented as a (count . elements) pair: 
+
+(defun make-empty-nlist () 
+"Create a new, empty nlist." 
+(cons 0 nil)) 
+
+(defun nlist-n (x) "The number of elements in an nlist." (carx)) 
+(defun nlist-list (x) "The elements in an nlist." (cdr x)) 
+
+(defun nlist-push (item nlist) 
+"Add a new element to an nlist." 
+(incf (car nlist)) 
+(push item (cdr nlist)) 
+nlist) 
+
+Now we need a place to store these nlists. We will build the data base out of 
+discrimination tree nodes called dtree nodes. Each dtree node has a field to hold 
+the variable index, the atom indices, and pointers to two subnodes, one for the first 
+and one for the rest. We implement dtrees as vectors for efficiency, and because we 
+will never need a dtree-. predicate. 
+
+(defstruct (dtree (:type vector)) 
+(first nil) (rest nil) (atoms nil) (var (make-empty-nlist))) 
+
+A separate dtree will be stored for each predicate. Since the predicates must be 
+symbols, it is possible to store the dtrees on the predicate's property list. In most 
+implementations, this will be faster than alternatives such as hash tables. 
+
+(let ((predicates nil)) 
+
+(defun get-dtree (predicate) 
+"Fetch (or make) the dtree for this predicate." 
+(cond ((get predicate 'dtree)) 
+
+(t (push predicate predicates) 
+(setf (get predicate 'dtree) (make-dtree))))) 
+
+(defun clear-dtrees () 
+"Remove all the dtrees for all the predicates." 
+(dolist (predicate predicates) 
+
+(setf (get predicate 'dtree) nil)) 
+(setf predicates nil))) 
+
+The function i ndex takes a relation as key and stores it in the dtree for the predicate 
+of the relation. It calls dtree - i ndex to do all the work of storing a value under the 
+proper indices for the key in the proper dtree node. 
+
+The atom indices are stored in an association Ust. Property lists would not 
+work, because they are searched using eq and atoms can be numbers, which are not 
+
+
+<a id='page-477'></a>
+necessarily eq. Association lists are searched using eql by default. An alternative 
+
+would be to use hash tables for the index, or even to use a scheme that starts with 
+
+association lists and switches to a hash table when the number of entries gets large. I 
+
+use 1 ookup to look up the value of a key in a property list. This function, and its setf 
+
+method, are defined on [page 896](chapter25.md#page-896). 
+
+(defun index (key) 
+"Store key in a dtree node. Key must be (predicate . args); 
+it is stored in the predicate's dtree." 
+(dtree-index key key (get-dtree (predicate key)))) 
+
+(defun dtree-index (key value dtree) 
+"Index value under all atoms of key in dtree." 
+(cond 
+
+((consp key) ; index on both first and rest 
+(dtree-index (first key) value 
+(or (dtree-first dtree) 
+(setf (dtree-first dtree) (make-dtree)))) 
+(dtree-index (rest key) value 
+(or (dtree-rest dtree) 
+
+(setf (dtree-rest dtree) (make-dtree))))) 
+((null key)) ; don't index on nil 
+((variable-p key) ; index a variable 
+
+(nlist-push value (dtree-var dtree))) 
+(t Make sure there is an nlist for this atom, and add to it 
+(nlist-push value (lookup-atom key dtree))))) 
+
+(defun lookup-atom (atom dtree) 
+"Return (or create) the nlist for this atom in dtree." 
+(or (lookup atom (dtree-atoms dtree)) 
+
+(let ((new (make-empty-nlist))) 
+(push (cons atom new) (dtree-atoms dtree)) 
+new))) 
+
+Now we define a function to test the indexing routine. Compare the output with 
+figure 14.1. 
+
+(defun test-index () 
+(let ((props '((p a b) (p a c) (p a ?x) (p b c) 
+
+(p b (f c)) (p a (f . ?x))))) 
+(clear-dtrees) 
+(mapc #*index props) 
+(write (list props (get-dtree '.)) 
+
+icircle t rarray t :pretty t) 
+(values))) 
+
+
+<a id='page-478'></a>
+
+> (test-index) 
+
+((#1=(P A B) 
+#2=(P A C) 
+#3=(P A ?X) 
+#4=(P . C) 
+#5=(P . (F O) 
+#6=(P A (F . ?X))) 
+
+#(#(NIL NIL (P (6 #6# #5# #4# #3# #2# #!#)) (0)) 
+#(#(NIL NIL (B (2 #5# #4#) A (4 #6# #3# #2# #!#)) (0)) 
+#(#(#(NIL NIL (F (2 #6# #5#)) (0)) 
+#(#(NIL NIL (C (1 #5#)) (0)) 
+
+#(NIL NIL NIL (0)) NIL (1 #6#)) 
+(C (2 #4# #2#) . (1 #!#)) 
+(1 #3#)) 
+
+#(NIL NIL NIL (0)) 
+NIL (0)) 
+NIL (0)) 
+NIL (0))) 
+
+The next step is to fetch matches from the dtree data base. The function fetch takes 
+a query, which must be a valid relation, as its argument, and returns a list of possible 
+matches. It calls dtree-fetch to do the work: 
+
+(defun fetch (query) 
+"Return a list of buckets potentially matching the query, 
+which must be a relation of form (predicate . args)." 
+(dtree-fetch query (get-dtree (predicate query)) 
+
+nil 0 nil most-positive-fixnum)) 
+
+dtree-fetch must be passed the query and the dtree, of course, but it is also passed 
+four additional arguments. First, we have to accumulate matches indexed under 
+variables as we are searching through the dtree. So two arguments are used to pass 
+the actual matches and a count of their total number. Second, we want dtree - fetch 
+to return the shortest possible index, so we pass it the shortest answer found so far, 
+and the size of the shortest answer. That way, as it is making its way down the tree, 
+accumulating values indexed under variables, it can be continually comparing the 
+size of the evolving answer with the best answer found so far. 
+
+We could use nlists to pass around count/values pairs, but nlists only support a 
+push operation, where one new item is added. We need to append together lists of 
+values coming from the variable indices with values indexed under an atom. Append 
+is expensive, so instead we make a list-of-lists and keep the count in a separate 
+variable. When we are done, dtree-fetch and hence fetch does a multiple-value 
+return, yielding the list-of-lists and the total count. 
+
+
+<a id='page-479'></a>
+There are four cases to consider in dtree-fetch. If the dtree is null or the query 
+pattern is either null or a variable, then nothing will be indexed, so we should just 
+return the best answer found so far. Otherwise, we bind var-. and var-1 ist to 
+the count and list-of-lists of variable matches found so far, including at the current 
+node. If the count var-. is greater than the best count so far, then there is no 
+sense continuing, and we return the best answer found. Otherwise we look at the 
+query pattern. If it is an atom, we use dtree-atom-f etch to return either the current 
+index (along with the accumulated variable index) or the accumulated best answer, 
+whichever is shorter. If the query is a cons, then we use dtree-fetch on the first 
+part of the cons, yielding a new best answer, which is passed along to the call of 
+dtree-fetch on the rest of the cons. 
+
+(defun dtree-fetch (pat dtree var-list-in var-n-in best-list best-n) 
+"Return two values: a list-of-lists of possible matches to pat. 
+and the number of elements in the list-of-lists." 
+(if (or (null dtree) (null pat) (variable-p pat)) 
+
+(values best-list best-n) 
+
+(let* ((var-nlist (dtree-var dtree)) 
+(var-n (+ var-n-in (nlist-n var-nlist))) 
+(var-list (if (null (nlist-list var-nlist)) 
+
+var-1 ist-i . 
+(cons (nlist-list var-nlist) 
+var-list-in)))) 
+
+(cond 
+((>= var-n best-n) (values best-list best-n)) 
+((atom pat) (dtree-atom-fetch pat dtree var-list var-n 
+
+best-list best-n)) 
+(t (multiple-value-bind (listl nl) 
+(dtree-fetch (first pat) (dtree-first dtree) 
+var-list var-n best-list best-n) 
+(dtree-fetch (rest pat) (dtree-rest dtree) 
+var-list var-n listl nl))))))) 
+
+(defun dtree-atom-fetch (atom dtree var-list var-n best-list best-n) 
+"Return the answers indexed at this atom (along with the vars), 
+or return the previous best answer, if it is better." 
+(let ((atom-nlist (lookup atom (dtree-atoms dtree)))) 
+
+(cond 
+((or (null atom-nlist) (null (nlist-list atom-nlist))) 
+(values var-list var-n)) 
+((and atom-nlist (< (incf var-n (nlist-n atom-nlist)) best-n)) 
+(values (cons (nlist-list atom-nlist) var-list) var-n)) 
+(t (values best-list best-n))))) 
+
+Here we see a call to fetch on the data base created by test - i ndex. It returns two 
+values: a list-of-lists of facts, and the total number of facts, three. 
+
+
+<a id='page-480'></a>
+
+> (fetch '(. ? c)) 
+(((. . . (. A .) 
+((. . ?.))) 
+3 
+
+Now let's stop and see what we have accomplished. The functions fetch and 
+dtree-fetch fulfill their contract of returning potential matches. However, we still 
+need to integrate the dtree facility with Prolog. We need to go through the potential 
+matches and determine which candidates are actual matches. For simplicity we will 
+use the version of u.i f y with binding lists defined in section 11.2. (It is also possible to 
+construct a more efficient version that uses the compiler and the destructive function 
+unifyl.) 
+
+The function mapc- retri eve calls fetch to get a Ust-of-Usts of potential matches 
+and then calls uni fy to see if the match is a true one. If the match is true, it calls 
+the supplied function with the binding list that represents the unification as the 
+argument, mapc-retri eve is proclaimed inl ine so that functions passed to it can 
+also be compiled in place. 
+
+(proclaim '(inline mapc-retrieve)) 
+
+(defun mapc-retrieve (fn query) 
+"For every fact that matches the query, 
+apply the function to the binding list. " 
+(dolist (bucket (fetch query)) 
+
+(dolist (answer bucket) 
+(let ((bindings (unify query answer))) 
+(unless (eq bindings fail) 
+(funcall fn bindings)))))) 
+
+There are many ways to use this retriever. The function retri eve returns a list of the 
+matching binding hsts, and retri eve-matches substitutes each binding hst into the 
+original query so that the result is a list of expressions that unify with the query. 
+
+(defun retrieve (query) 
+"Find all facts that match query. Return a list of bindings." 
+(let ((answers nil)) 
+
+(mapc-retrieve #'(lambda (bindings) (push bindings answers)) 
+query) 
+answers)) 
+
+(defun retrieve-matches (query) 
+"Find all facts that match query. 
+Return a list of expressions that match the query." 
+(mapcar #'(lambda (bindings) (subst-bindings bindings query)) 
+
+(retrieve query))) 
+
+
+<a id='page-481'></a>
+There is one further complication to consider. Recall that in our original Prolog 
+interpreter, the function prove had to rename the variables in each clause as it 
+retrieved it from the data base. This was to insure that there was no conflict between 
+the variables in the query and the variables in the clause. We could do that in 
+retrieve. However, if we assume that the expressions indexed in discrimination 
+trees are tablelike rather than rulelike and thus are not recursive, then we can get 
+away with renaming the variables only once, when they are entered into the data 
+base. This is done by changing i ndex: 
+
+(defun index (key) 
+"Store key in a dtree node. Key must be (predicate . args); 
+it is stored in the predicate's dtree." 
+(dtree-index key (rename-variables key) ; store unique vars 
+
+(get-dtree (predicate key)))) 
+
+With the new i ndex in place, and after calling test - i ndex to rebuild the data base, 
+we are now ready to test the retrieval mechanism: 
+
+> (fetch '(p ?x c)) 
+(((P . C) (P A O) 
+((PA 7X3408))) 
+3 
+
+> (retrieve '(p ?x c)) 
+
+(((7X3408 . C) (7X . A)) 
+((7X . A)) 
+((7X . B))) 
+
+> (retrieve-matches '(p 7x c)) 
+
+((P A C) (P A C) (P . .) 
+
+> (retrieve-matches *(p 7x (7fn c))) 
+
+((P A (7FN O) (P A (F O) (P . (F C))) 
+
+Actually, it is better to use mapc-retrieve when possible, since it doesn't cons up 
+
+answers the way retrieve and retrieve-matches do. The macro query-bind is 
+
+provided as a nice interface to mapc - ret r i eve. The macro takes as arguments a list of 
+
+variables to bind, a query, and one or more forms to apply to each retrieved answer. 
+
+Within this list of forms, the variables will be bound to the values that satisfy the 
+
+query. The syntax was chosen to be the same as mul ti pi e - va 1 ue - bi nd. Here we see 
+
+a typical use of query - bi nd, its result, and its macro-expansion: 
+
+
+<a id='page-482'></a>
+
+> (query-bind (?x ?fn) '(p ?x (?fn c)) 
+
+(format t "~&P holds between ~a and ~a of c." ?x ?fn)) =. 
+. holds between . and F of c. 
+. holds between A and F of c. 
+. holds between A and ?FN of c. 
+NIL 
+
+= (mapc-retrieve 
+#'(lambda (#:bindings6369) 
+(let ((?x (subst-bindings #:bindings6369 '?.)) 
+(?fn (subst-bindings #:bindings6369 '?fn))) 
+(format t "~&P holds between ~a and ~a of c." ?x ?fn))) 
+'(p ?x (?fn c))) 
+
+Here is the implementation: 
+
+(defmacro query-bind (variables query &body body) 
+"Execute the body for each match to the query. 
+Within the body, bind each variable." 
+(let* ((bindings (gensym "BINDINGS")) 
+
+(vars-and-vals 
+(mapcar 
+#'(lambda (var) 
+(list var '(subst-bindings .bindings ',var))) 
+variables))) 
+'(mapc-retrieve 
+#'(lambda (.bindings) 
+(let ,vars-and-vals 
+.body)) 
+.query))) 
+
+14.9 A Solution to the Completeness Problem 
+We saw in chapter 6 that iterative deepening is an efficient way to cover a search 
+space without falling into an infinite loop. Iterative deepening can also be used to 
+guide the search in Prolog. It will insiu-e that all valid answers are found eventually, 
+but it won't turn an infinite search space into a finite one. 
+
+In the interpreter, iterative deepening is implemented by passing an extra argument 
+to prove and prove-a 11 to indicate the depth remaining to be searched. When 
+that argument is zero, the search is cut off, and the proof fails. On the next iteration 
+the bounds will be increased and the proof may succeed. If the search is never cut off 
+by a depth bound, then there is no reason to go on to the next iteration, because all 
+
+
+<a id='page-483'></a>
+proofs have already been found. The special variable *sea r ch - cut - off* keeps track 
+of this. 
+
+(defvar *search-cut-off* nil "Has the search been stopped?") 
+
+(defun prove-all (goals bindings depth) 
+"Find a solution to the conjunction of goals." 
+This version just passes the depth on to PROVE, 
+
+(cond ((eq bindings fail) fail) 
+((null goals) bindings) 
+(t (prove (first goals) bindings (rest goals) depth)))) 
+
+(defun prove (goal bindings other-goals depth) 
+"Return a list of possible solutions to goal." 
+:; Check if the depth bound has been exceeded 
+(if (= depth 0) 
+
+(progn (setf *search-cut-off* t) 
+fail) 
+(let ((clauses (get-clauses (predicate goal)))) 
+(if (listp clauses) 
+(some 
+#'(lambda (clause) 
+(let ((new-clause (rename-variables clause))) 
+
+(prove-al1 
+(append (clause-body new-clause) other-goals) 
+(unify goal (clause-head new-clause) bindings) 
+(- depth 1)))) 
+
+clauses) 
+
+The predicate's "clauses" can be an atom: 
+;; a primitive function to call 
+(funcall clauses (rest goal) bindings 
+
+other-goals depth))))) 
+
+prove and . rove - a 11 now implement search cutoff, but we need something to control 
+the iterative deepening of the search. First we define parameters to control the 
+iteration: one for the initial depth, one for the maximum depth, and one for the 
+increment between iterations. Setting the initial and increment values to one will 
+make the results come out in strict breadth-first order, but will duplicate more effort 
+than a slightly larger value. 
+
+
+<a id='page-484'></a>
+
+(defparameter *depth-start* 5 
+"The depth of the first round of iterative search.") 
+(defparameter *depth-incr* 5 
+"Increase each iteration of the search by this amount.") 
+(defparameter *depth-max* most-positive-fixnum 
+"The deepest we will ever search.") 
+
+A new version of top-level - prove will be used to control the iteration. It calls 
+prove-al 1 for all depths from the starting depth to the maximum depth, increasing 
+by the increment. However, it only proceeds to the next iteration if the search was 
+cut off at some point in the previous iteration. 
+
+(defun top-level-prove (goals) 
+(let ((all-goals 
+*(,goals (show-prolog-vars ,@(variables-in goals))))) 
+(loop for depth from *depth-start* to *depth-max* by *depth-incr* 
+
+while (let ((*search-cut-off* nil)) 
+(prove-all all-goals no-bindings depth) 
+*search-cut-off*))) 
+
+(format t "~&No.") 
+(values)) 
+
+There is one final complication. When we increase the depth of search, we may 
+find some new proofs, but we will also find all the old proofs that were found on the 
+previous iteration. We can modify show-prol og-vars to only print proofs that are 
+found with a depth less than the increment - that is, those that were not found on the 
+previous iteration. 
+
+(defun show-prolog-vars (vars bindings other-goals depth) 
+"Print each variable with its binding. 
+Then ask the user if more solutions are desired." 
+(if (> depth *depth-incr*) 
+
+fail 
+(progn 
+
+(if (null vars) 
+(format t "~&Yes") 
+(dolist (var vars) 
+
+(format t "~&~a = ~a" var 
+(subst-bindings bindings var)))) 
+
+(if (continue-p) 
+fail 
+(prove-all other-goals bindings depth))))) 
+
+To test that this works, try setting *depth-max* to 5 and running the following 
+assertions and query. The infinite loop is avoided, and the first four solutions 
+are found. 
+
+
+<a id='page-485'></a>
+(<- (natural 0)) 
+(<- (natural (1+ ?n)) (natural ?n)) 
+
+> (?- (natural ?n)) 
+
+?N = 0; 
+
+?N = (1+ 0); 
+
+?N = (1+ (1+ 0)); 
+
+?N = (1+ (1+ (1+ 0))); 
+
+No. 
+
+14.10 Solutions to the Expressiveness Problems 
+In this section we present solutions to three of the limitations described above: 
+
+* Treatment of (limited) higher-order predications. 
+* Introduction of a frame-based syntax. 
+* Support for possible worlds, negation, and disjunction. 
+We also introduce a way to attach functions to predicates to do forward-chaining 
+
+and error detection, and we discuss ways to extend unification to handle Skolem 
+
+constants and other problems. 
+
+Higher-Order Predications 
+
+First we will tackle the problem of answering questions like "What kinds of animals 
+are there?" Paradoxically, the key to allowing more expressiveness in this case is to 
+invent a new, more limited language and insist that all assertions and queries are 
+made in that language. That way, queries that would have been higher-order in the 
+original language become first-order in the restricted language. 
+
+The language admits three types of objects: categones, relations, and individuals. 
+A category corresponds to a one-place predicate, a relation to a two-place predicate, 
+and an individual to constant, or zero-place predicate. Statements in the language 
+musthaveoneof five primitive operators: sub, rel, ind. val , and and. They have 
+the following form: 
+
+(sub subcategorysupercategory) 
+(rel relation domain-category range-category) 
+(i nd individual category) 
+(val relation individual value) 
+(and assertion...) 
+
+
+<a id='page-486'></a>
+
+The following table gives some examples, along with English translations: 
+
+(sub dog animal) Dog is a kind of animal. 
+(rel birthday animal date) The birthday relation holds between each animal 
+and some date. 
+(ind fido dog) The individual Fido is categorized as a dog. 
+(val birthday fido july-1) The birthday of Fido is July-1. 
+(and AB) Both A and Bare true. 
+For those who feel more comfortable with predicate calculus, the following table 
+gives the formal definition of each primitive. The most complicated definition is for 
+rel. The form (rel RAB) means that every R holds between an individual of A 
+and an individual of B, and furthermore that every individual of A participates in at 
+
+least one R relation. 
+(sub AB) Va:: A(x) D 
+(rel RAB) "rfx^y: R{x,y) D A{x) A B{y) 
+A\/xA{x) D 3y : R{x, y) 
+(ind IC) C{I) 
+(val RIV) R{I,V) 
+(and PQ...) PAQ.,. 
+
+Queries in the language, not surprisingly, have the same form as assertions, 
+except that they may contain variables as well as constants. Thus, to find out what 
+kinds of animals there are, use the query (sub ?kind animal). To find out what 
+individual animals there are, use the query (ind ?x animal). To find out what 
+individual animals of what kinds there are, use: 
+
+(and (sub ?kind animal) (ind ?x ?kind)) 
+
+The implemention of this new language can be based directly on the previous implementation 
+of dtrees. Each assertion is stored as a fact in a dtree, except that 
+the components of an and assertion are stored separately. The function add-fact 
+does this: 
+
+(defun add-fact (fact) 
+
+"Add the fact to the data base." 
+
+(if (eq (predicate fact) 'and) 
+
+(mapc #*add-fact (args fact)) 
+(index fact))) 
+
+Querying this new data base consists of querying the dtree just as before, but with 
+a special case for conjunctive (and) queries. Conceptually, the function to do this, 
+retri eve-fact, should be as simple as the following: 
+
+
+<a id='page-487'></a>
+(defun retrieve-fact (query) 
+"Find all facts that match query. Return a list of bindings. 
+Warning!! this version is incomplete." 
+(if (eq (predicate query) 'and) 
+
+(retrieve-conjunction (args query)) 
+(retrieve query bindings))) 
+
+Unfortunately, there are some complications. Think about what must be done in 
+retrieve-conjunction. It is passed a list of conjuncts and must return a list of 
+binding lists, where each binding list satisfies the query. For example, to find out 
+what people were born on July 1st, we could use the query: 
+
+(and (val birthday ?p july-1) (ind ?p person)) 
+
+retrieve-conjunction could solve this problem by first calling retrieve-fact on 
+(val birthday ?p july-1). Once that is done, there is only one conjunct remaining, 
+but in general there could be several, so we need to call ret r i eve - conj uncti on recursively 
+with two arguments: theremainingconjuncts,andtheresultthat retrieve-fact 
+gave for the first solution. Since retrieve-fact returns a list of binding lists, it will 
+be easiest if retri eve-conjunct i on accepts such a list as its second argument. Furthermore, 
+when it comes time to call retri eve- fact on the second conjunct, we will 
+want to respect the bindings set up by the first conjunct. So retri eve -fact must 
+accept a binding list as its second argument. Thus we have: 
+
+(defun retrieve-fact (query &optional (bindings no-bindings)) 
+"Find all facts that match query. Return a list of bindings." 
+(if (eq (predicate query) 'and) 
+
+(retrieve-conjunction (args query) (list bindings)) 
+(retrieve query bindings))) 
+
+(defun retrieve-conjunction (conjuncts bindings-lists) 
+"Return a list of binding lists satisfying the conjuncts." 
+(mapcan 
+
+#'(lambda (bindings) 
+
+(cond ((eq bindings fail) nil) 
+((null conjuncts) (list bindings)) 
+(t (retrieve-conjunction 
+
+(rest conjuncts) 
+
+(retrieve-fact 
+(subst-bindings bindings (first conjuncts)) 
+bindings))))) 
+
+bindings-lists)) 
+
+Notice that retrieve and therefore mapc-retrieve now also must accept a binding 
+list. The changes to them are shown in the following. In each case the extra argument 
+
+
+<a id='page-488'></a>
+
+is made optional so that previously written functions that call these functions without 
+passing in the extra argument will still work. 
+
+(defun mapc-retrieve (fn query &optional (bindings no-bindings)) 
+"For every fact that matches the query, 
+apply the function to the binding list. " 
+(dolist (bucket (fetch query)) 
+
+(dolist (answer bucket) 
+(let ((new-bindings (unify query answer bindings))) 
+(unless (eq new-bindings fail) 
+(funcall fn new-bindings)))))) 
+
+(defun retrieve (query &optional (bindings no-bindings)) 
+"Find all facts that match query. Return a list of bindings." 
+(let ((answers nil)) 
+
+(mapc-retrieve #'(lambda (bindings) (push bindings ansviers)) 
+query bindings) 
+answers)) 
+
+Now add - fact and ret r i eve - fact comprise all we need to implement the language. 
+Here is a short example where add-fact is used to add facts about bears and dogs, 
+both as individuals and as species: 
+
+> (add-fact *(sub dog animal)) => . 
+> (add-fact '(sub bear animal)) => . 
+> (add-fact '(ind Fido dog)) => . 
+> (add-fact '(ind Yogi bear)) . 
+> (add-fact '(val color Yogi brown)) => . 
+> (add-fact '(val color Fido golden)) . 
+> (add-fact '(val latin-name bear ursidae)) => . 
+> (add-fact '(val latin-name dog canis-familiaris)) => . 
+
+Now retrieve -fact is used to answer three questions: What kinds of animals are 
+there? What are the Latin names of each kind of animal? and What are the colors of 
+each individual bear? 
+
+> (retrieve-fact '(sub ?kind animal)) 
+(((?KIND . DOG)) 
+((?KIND . BEAR))) 
+
+> (retrieve-fact '(and (sub ?kind animal) 
+(val latin-name ?kind ?latin))) 
+(((7LATIN . CANIS-FAMILIARIS) (7KIND . DOG)) 
+((7LATIN . URSIDAE) (7KIND . BEAR))) 
+
+
+<a id='page-489'></a>
+> (retrieve-fact '(and (ind ?x bear) (val color ?x ?c))) 
+
+(((?C . BROWN) (?X . YOGI))) 
+
+Improvements 
+
+There are quite a few improvements that can be made to this system. One direction 
+is to provide different kinds of answers to queries. The following two functions 
+are similar to retri eve-matches in that they return lists of solutions that match the 
+query, rather than lists of possible bindings: 
+
+(defun retrieve-bagof (query) 
+
+"Find all facts that match query. 
+
+Return a list of queries with bindings filled in." 
+
+(mapcar #'(lambda (bindings) (subst-bindings bindings query)) 
+
+(retrieve-fact query))) 
+
+(defun retrieve-setof (query) 
+"Find all facts that match query. 
+Return a list of unique queries with bindings filled in. " 
+(remove-duplicates (retrieve-bagof query) :test #'equal)) 
+
+Another direction to take is to provide better error checking. The current system 
+does not complain if a fact or query is ill-formed. It also relies on the user to input all 
+facts, even those that could be derived automatically from the semantics of existing 
+facts. Forexample, the semantics of sub imply that if (sub bear animal) and (sub 
+polar-bear bear) are true, then (subpolar-bear animal) must also be true. This 
+kind of implication can be handled in two ways. The typical Prolog approach would 
+be to write rules that derive the additional sub facts by backward-chaining. Then 
+every query would have to check if there were rules to run. The alternative is to use 
+aforward-chaining approach, which caches each new sub fact by adding it to the data 
+base. This latter alternative takes more storage, but because it avoids rederiving the 
+same facts over and over again, it tends to be faster. 
+
+The following version of add-fact does error checking, and it automatically 
+caches facts that can be derived from existing facts. Both of these things are done by 
+a set of functions that are attached to the primitive operators. It is done in a data-
+driven style to make it easier to add new primitives, should that become necessary. 
+
+The function add-fact checks that each argument to a primitive relation is a 
+nonvariable atom, and it also calls fact-present-p to check if the fact is already 
+present in the data base. If not, it indexes the fact and calls run-attached-f . to do 
+additional checking and caching: 
+
+(defparameter ^primitives* '(and sub ind rel val)) 
+
+
+<a id='page-490'></a>
+
+(defun add-fact (fact) 
+"Add the fact to the data base." 
+(cond ((eq (predicate fact) *and) 
+
+(mapc #*add-fact (args fact))) 
+
+((or (not (every #*atom (args fact))) 
+(some #'variable-p (args fact)) 
+(not (member (predicate fact) *primitives*))) 
+
+(error "111-formed fact: ~a" fact)) 
+
+((not (fact-present-p fact)) 
+(index fact) 
+(run-attached-fn fact))) 
+
+t) 
+
+(defun fact-present-p (fact) 
+"Is this fact present in the data base?" 
+(retrieve fact)) 
+
+The attached functions are stored on the operator's property list under the indicator 
+
+attached-fn: 
+
+(defun run-attached-fn (fact) 
+"Run the function associated with the predicate of this fact." 
+(apply (get (predicate fact) 'attached-fn) (args fact))) 
+
+(defmacro def-attached-fn (pred args &body body) 
+"Define the attached function for a primitive." 
+'(setf (get '.pred 'attached-fn) 
+
+#'(lambda ,args ..body))) 
+
+The attached functions for ind and val are fairly simple. If we know (sub bear 
+ani mal), then when ( i nd Yogi bea r) is asserted, we have to also assert ( i nd Yogi 
+animal). Similarly, the values in a val assertion must be individuals of the categories 
+in the relation's rel assertion. That is, if ( rel bi rthday animal date) is a fact and 
+(val birthday Lee ju1y-l) is added, then we can conclude (ind Lee animal) and 
+(ind july-1 date). The followingfunctions add the appropriate facts: 
+
+(def-attached-fn ind (individual category) 
+Cache facts about inherited categories 
+(query-bind (?super) '(sub .category ?super) 
+(add-fact '(ind .individual .?super)))) 
+
+
+<a id='page-491'></a>
+
+(def-attached-fn val (relation indi ind2) 
+Make sure the individuals are the right kinds 
+
+(query-bind (?catl ?cat2) '(rel .relation ?catl ?cat2) 
+(add-fact *(ind ,indl .?catl)) 
+(add-fact '(ind .ind2 .?cat2)))) 
+
+The attached function for rel simply runs the attached function for any individual of 
+the given relation. Normally one would make all rel assertions before i nd assertions, 
+so this will have no effect at all. But we want to be sure the data base stays consistent 
+even if facts are asserted in an unusual order. 
+
+(def-attached-fn rel (relation catl cat2) 
+Run attached function for any IND's of this relation 
+(query-bind (?a ?b) '(ind .relation ?a ?b) 
+(run-attached-fn '(ind .relation .?a .?b)))) 
+
+The most complicated attached function is for sub. Adding a fact such as (sub bear 
+animal) causes the following to happen: 
+
+* All of animal's supercategories (such as 1 iving-thing) become supercategories 
+of all of bea r's subcategories (such as pol ar - bea r). 
+* animal itself becomes a supercategory all of bear's subcategories. 
+* bear itself becomes a subcategory of all of animal's supercategories. 
+* All of the individuals of bear become individuals of animal and its supercategories. 
+The following accomplishes these four tasks. It does it with four calls to 
+index-new-fact, which is used instead of add-fact because we don't need to run 
+the attached function on the new facts. We do, however, need to make sure that we 
+aren't indexing the same fact twice. 
+
+(def-attached-fn sub (subcat supercat) 
+Cache SUB facts 
+
+(query-bind (?super-super) '(sub .supercat ?super-super) 
+(index-new-fact '(sub .subcat .?super-super)) 
+(query-bind (?sub-sub) '(sub ?sub-sub .subcat) 
+
+(index-new-fact '(sub .?sub-sub .?super-super)))) 
+(query-bind (?sub-sub) '(sub ?sub-sub .subcat) 
+(index-new-fact '(sub .?sub-sub .supercat))) 
+Cache IND facts 
+(query-bind (?super-super) '(sub .subcat ?super-super) 
+(query-bind (?sub-sub) '(sub ?sub-sub .supercat) 
+(query-bind (?ind) '(ind ?ind .?sub-sub) 
+(index-new-fact '(ind .?ind .?super-super)))))) 
+
+
+<a id='page-492'></a>
+
+(defun index-new-fact (fact) 
+
+"Index the fact in the data base unless it is already there." 
+
+(unless (fact-present-p fact) 
+
+(index fact))) 
+
+The following function tests the attached functions. It shows that adding the single 
+fact (sub bea r ani mal) to the given data base causes 18 new facts to be added. 
+
+(defun test-bears () 
+
+(clear-dtrees) 
+
+(mapc #'add-fact 
+
+'((sub animal living-thing) 
+
+(sub living-thing thing) (sub polar-bear bear) 
+
+(sub grizzly bear) (ind Yogi bear) (ind Lars polar-bear) 
+
+(ind Helga grizzly))) 
+
+(trace index) 
+
+(add-fact '(sub bear animal)) 
+
+(untrace index)) 
+
+> (test-bears) 
+
+(1 ENTER INDEX: (SUB BEAR ANIMAL)) 
+
+(1 EXIT INDEX: T) 
+
+(1 ENTER INDEX: (SUB BEAR THING)) 
+
+(1 EXIT INDEX: T) 
+
+(1 ENTER INDEX: (SUB GRIZZLY THING)) 
+
+(1 EXIT INDEX: T) 
+
+(1 ENTER INDEX: (SUB POLAR-BEAR THING)) 
+
+(1 EXIT INDEX: T) 
+
+(1 ENTER INDEX: (SUB BEAR LIVING-THING)) 
+
+(1 EXIT INDEX: T) 
+
+(1 ENTER INDEX: (SUB GRIZZLY LIVING-THING)) 
+
+(1 EXIT INDEX: T) 
+
+(1 ENTER INDEX: (SUB POLAR-BEAR LIVING-THING)) 
+
+(1 EXIT INDEX: T) 
+
+(1 ENTER INDEX: (SUB GRIZZLY ANIMAL)) 
+
+(1 EXIT INDEX: T) 
+
+(1 ENTER INDEX: (SUB POLAR-BEAR ANIMAL)) 
+
+(1 EXIT INDEX: T) 
+
+(1 ENTER INDEX: (IND LARS LIVING-THING)) 
+
+(1 EXIT INDEX: T) 
+
+(1 ENTER INDEX: (IND HELGA LIVING-THING)) 
+
+(1 EXIT INDEX: T) 
+
+(1 ENTER INDEX: (IND YOGI LIVING-THING)) 
+
+(1 EXIT INDEX: T) 
+
+(1 ENTER INDEX: (IND LARS THING)) 
+
+(1 EXIT INDEX: T) 
+
+(1 ENTER INDEX: (IND HELGA THING)) 
+
+
+<a id='page-493'></a>
+(1 EXIT INDEX: T) 
+(1 ENTER INDEX: (IND YOGI THING)) 
+(1 EXIT INDEX: T) 
+(1 ENTER INDEX: (IND LARS ANIMAD) 
+(1 EXIT INDEX: .) 
+(1 ENTER INDEX: (IND HELGA ANIMAD) 
+(1 EXIT INDEX: .) 
+(1 ENTER INDEX: (IND YOGI ANIMAD) 
+(1 EXIT INDEX: .) 
+(INDEX) 
+
+A Frame Language 
+
+Another direction we can take is to provide an alternative syntax that will be easier 
+to read and write. Many representation languages are based on the idea of frames, 
+and their syntax reflects this. A frame is an object with slots. We will continue to use 
+the same data base in the same format, but we will provide an alternative syntax that 
+considers the individuals and categories as frames, and the relations as slots. 
+
+Here is an example of the frame syntax for individuals, which uses the operator 
+
+a.Note that it is more compact than the equivalent notation using the primitives. 
+(a person (name Joe) (age 27)) = 
+
+(and (ind personl person) 
+(val name personl Joe) 
+(val age personl 27)) 
+
+The syntax also allows for nested expressions to appear as the values of slots. Notice 
+that the Skolem constant personl was generated automatically; an alternative is 
+to supply a constant for the individual after the category name. For example, the 
+following says that Joe is a person of age 27 whose best friend is a person named Fran 
+who is 28 and whose best friend is Joe: 
+
+(a person pi (name Joe) (age 27) 
+(best-friend (a person (name Fran) (age 28) 
+(best-friend pi)))) = 
+
+(and (ind pi person) (val name pi joe) (val age pi 27) 
+(ind person2 person) (val name person2 fran) 
+(val age person2 28) (val best-friend person2 pi) 
+(val best-friend pi person2)) 
+
+
+<a id='page-494'></a>
+
+The frame syntax for categories uses the operator each. For example: 
+
+(each person (isa animal) (name person-name) (age integer)) = 
+
+(and (sub person animal) 
+(rel name person person-name) 
+(rel age person integer)) 
+
+The syntax for queries is the same as for assertions, except that variables are used 
+instead of the Skolem constants. This is true even when the Skolem constants are 
+automatically generated, as in the following query: 
+
+(a person (age 27)) = (AND (IND ?3 PERSON) (VAL AGE ?3 27)) 
+
+To support the frame notation, we define the macros a and each to make assertions 
+and ?? to make queries. 
+
+(defmacro a (&rest args) 
+"Define a new individual and assert facts about it in the data base." 
+*(add-fact \(translate-exp (cons *a args)))) 
+
+(defmacro each (&rest args) 
+"Define a new category and assert facts about it in the data base." 
+'(add-fact (translate-exp (cons 'each args)))) 
+
+(defmacro ?? (&rest queries) 
+"Return a list of answers satisfying the query or queries." 
+*(retrieve-setof 
+
+'.(translate-exp (maybe-add 'and (replace-?-vars queries)) 
+rquery))) 
+
+All three of these macros call on trans! ate - exp to translate from the frame syntax to 
+the primitive syntax. Note that an a or ea ch expression is computing a conjunction of 
+primitive relations, but it is also computing a term when it is used as the nested value 
+of a slot. It would be possible to do this by returning multiple values, but it is easier to 
+build translate - exp as a set of local functions that construct facts and push them on 
+the local variable conj uncts. At the end, the list of conj uncts is returned as the value 
+of the translation. The local functions trans! ate-a and trans! ate-each return the 
+atom that represents the term they are translating. The local function translate 
+translates any kind of expression, trans! ate -s! ot handles a slot, and co!! ect- f act 
+is responsible for pushing a fact onto the list of conjuncts. The optional argument 
+query-mode-p tells what to do if the individual is not provided in an a expression. If 
+query-mode-p is true, the individual will be represented by a variable; otherwise it 
+will be a Skolem constant. 
+
+
+<a id='page-495'></a>
+(defun translate-exp (exp &optional query-mode-p) 
+"Translate exp into a conjunction of the four primitives." 
+(let ((conjuncts nil)) 
+
+(labels 
+((collect-fact (&rest terms) (push terms conjuncts)) 
+
+(translate (exp) 
+Figure out what kind of expression this is 
+
+(cond 
+((atom exp) exp) 
+((eq (first exp) *a) (translate-a (rest exp))) 
+((eq (first exp) 'each) (translate-each (rest exp))) 
+(t (apply #'collect-fact exp) exp))) 
+
+(translate-a (args) 
+translate (A category Cind] (rel filler)*) 
+(let* ((category (pop args)) 
+(self (cond ((and args (atom (first args))) 
+
+(pop args)) 
+(query-mode-p (gentemp "?")) 
+(t (gentemp (string category)))))) 
+
+(collect-fact 'ind self category) 
+(dolist (slot args) 
+(translate-slot 'val self slot)) 
+self)) 
+
+(translate-each (args) 
+;; translate (EACH category [(isa cat*)] (slot cat)*) 
+(let* ((category (pop args))) 
+
+(when (eq (predicate (first args)) 'isa) 
+(dolist (super (rest (pop args))) 
+(collect-fact 'sub category super))) 
+(dolist (slot args) 
+(translate-slot 'rel category slot)) 
+category)) 
+
+(translate-slot (primitive self slot) 
+
+translate (relation value) into a REL or SUB 
+(assert (= (length slot) 2)) 
+(collect-fact primitive (first slot) self 
+
+(translate (second slot))))) 
+
+Body of translate-exp: 
+(translate exp) Build up the list of conjuncts 
+(maybe-add 'and (nreverse conjuncts))))) 
+
+
+<a id='page-496'></a>
+
+The auxiliary functions maybe - add and repl ace -? - va r s are shown in the following: 
+
+(defun maybe-add (op exps &optional if-nil) 
+"For example, (maybe-add 'and exps t) returns 
+t if exps is nil, (first exps) if there is only one. 
+and (and expl exp2...) if there are several exps." 
+(cond ((null exps) if-nil) 
+
+((length=1 exps) (first exps)) 
+(t (cons op exps)))) 
+
+(defun length=1 (x) 
+"Is X a list of length 1?" 
+(and (consp x) (null (cdr x)))) 
+
+(defun replace-?-vars (exp) 
+"Replace each ? in exp with a temporary var: 7123" 
+(cond ((eq exp '7) (gentemp "7")) 
+
+((atom exp) exp) 
+
+(t (reuse-cons (replace-7-vars (first exp)) 
+(replace-7-vars (rest exp)) 
+exp)))) 
+
+Possible Worlds: Truth, Negation, and Disjunction 
+
+In this section we address four problems: distinguishing unknown from f al se, representing 
+negations, representing disjunctions, and representing multiple possible 
+states of affairs. It turns out that all four problems can be solved by introducing 
+two new techniques: possible worlds and negated predicates. The solution is not 
+completely general, but it is practical in a wide variety of applications. 
+
+There are two basic ways to distinguish unknown from false. The first possibility 
+is to store a truth value - true or false - along with each proposition. The second 
+possibility is to include the truth value as part of the proposition. There are several 
+syntactic variations on this theme. The following table shows the possibilities for 
+the propositions "Jan likes Dean is true" and "Jan likes Ian is false:" 
+
+Approach True Prop. False Prop. 
+(1) 
+(2a) 
+(likes(likes 
+Jan Dean) 
+true Jan Dean) 
+-true 
+(likes(likes 
+Jan Ian) -false 
+false Jan Ian) 
+{2b) (likes Jan Dean) (not (likes Jan Dean)) 
+(2c) (likes Jan Dean) (~likes Jan Dean) 
+
+The difference between (1) and (2) shows up when we want to make a query. 
+With (1), we make the single query (1 i kes JanDean) (or perhaps (1 i kes Jan ?x)), 
+and the answers will tell us who Jan does and does not like. With (2), we make one 
+
+
+<a id='page-497'></a>
+query to find out what liking relationships are true, and another to find out which 
+ones are false. In either approach, if there are no responses then the answer is truly 
+unknown. 
+
+Approach (1) is better for applications where most queries are of the form "Is 
+this sentence true or false?" But applications that include backward-chaining rules 
+are not like this. The typical backward-chaining rule says "Conclude X is true ifY is 
+true." Thus, most queries will be of the type "Is Y true?" Therefore, some version of 
+approach (2) is preferred. 
+
+Representing true and false opens the door to a host of possible extensions. First, 
+we could add multiple truth values beyond the simple "true" and "false." These 
+could be symbolic values like "probably-true" or "false-by-default" or they could be 
+numeric values representing probabilities or certainty factors. 
+
+Second, we could introduce the idea of possible worlds. That is, the truth of a 
+proposition could be unknown in the current world, but true if we assume p, and 
+false if we assume q. In the possible world approach, this is handled by calling the 
+current world W, and then creating a new world VFi, which is just like W except 
+that . is true, and w2, which is just like W except that q is true. By doing reasoning 
+in different worlds we can make predictions about the future, resolve ambiguitites 
+about the current state, and do reasoning by cases. 
+
+For example, possible worlds allow us to solve Moore's communism/democracy 
+problem ([page 466](chapter14.md#page-466)). We create two new possible worlds, one where is a democracy 
+and one where it is communist. In each world it is easy to derive that there is 
+a democracy next to a communist country. The trick is to realize then that the 
+two worlds form a partition, and that therefore the assertion holds in the original 
+"real" world as well. This requires an interaction between the Prolog-based tactical 
+reasoning going on within a world and the planning-based strategic reasoning that 
+decides which worlds to consider. 
+
+We could also add a truth maintenance system (or TMS) to keep track of the assumptions 
+or justifications that lead to each fact being considered true. A truth 
+maintenance system can lessen the need to backtrack in a search for a global solution. 
+Although truth maintenance systems are an important part of AI programming, 
+they will not be covered in this book. 
+
+In this section we extend the dtree facility (section 14.8) to handle truth values 
+and possible worlds. With so many options, it is difficult to make design choices. We 
+will choose a fairly simple system, one that remains close to the simplicity and speed 
+of Prolog but offers additional functionality when needed. We will adopt approach 
+(2c) to truth values, using negated predicates. For example, the negated predicate of 
+1 i kes is ~1 i kes, which is pronounced "not likes." 
+
+We will also provide minimal support for possible worlds. Assume that there is 
+always a current world, W, and that there is a way to create alternative worlds and 
+change the current world to an alternative one. Assertions and queries will always be 
+made with respect to the current world. Each fact is indexed by the atoms it contains. 
+
+
+<a id='page-498'></a>
+
+just as before. The difference is that the facts are also indexed by the current world. 
+To support this, we need to modify the notion of the numbered list, or nlist, to 
+include a numbered association list, or nal i st. The following is an nal i st showing 
+six facts indexed under three different worlds: WO, Wl, and W2: 
+
+(6 (WO #1# #2# #3#) (Wl #4#) (W2 #5# #6#)) 
+
+The fetching routine will remain unchanged, but the postfetch processing will have 
+to sort through the nalists to find only the facts in the current world. It would also be 
+possible for fetch to do this work, but the reasoning is that most facts will be indexed 
+under the "real world," and only a few facts will exist in alternative, hypothetical 
+worlds. Therefore, we should delay the effort of sorting through the answers to 
+eliminate those answers in the wrong world - it may be that the first answer fetched 
+will suffice, and then it would have been a waste to go through and eliminate other 
+answers. The following changes to i ndex and dtree -i ndex add support for worlds: 
+
+(defvar *world* *W0 "The current world used by index and fetch.") 
+
+(defun index (key &optional (world *world*)) 
+"Store key in a dtree node. Key must be (predicate . args); 
+it is stored in the dtree, indexed by the world." 
+(dtree-index key key world (get-dtree (predicate key)))) 
+
+(defun dtree-index (key value world dtree) 
+"Index value under all atoms of key in dtree." 
+(cond 
+
+((consp key) ; index on both first and rest 
+(dtree-index (first key) value world 
+(or (dtree-first dtree) 
+(setf (dtree-first dtree) (make-dtree)))) 
+(dtree-index (rest key) value world 
+(or (dtree-rest dtree) 
+(setf (dtree-rest dtree) (make-dtree))))) 
+((null key)) ; don't index on nil 
+
+((variable-p key) ; index a variable 
+(nalist-push world value (dtree-var dtree))) 
+(t ;; Make sure there is an nlist for this atom, and add to it 
+(nalist-push world value (lookup-atom key dtree))))) 
+
+The new function nalist-push adds a value to an nalist, either by inserting the value 
+in an existing key's list or by adding a new key/value list: 
+
+
+<a id='page-499'></a>
+(defun nalist-push (key val nalist) 
+"Index val under key in a numbered al ist. " 
+;; An nalist is of the form (count (key val*)*) 
+
+Ex: (6 (nums 1 2 3) (letters a b c)) 
+(incf (car nalist)) 
+(let ((pair (assoc key (cdr nalist)))) 
+
+(if pair 
+(push val (cdr pair)) 
+(push (list key val) (cdr nalist))))) 
+
+In the following, fetch is used on the same data base created by tes t -i ndex, indexed 
+under the world WO. This time the result is a list-of-lists of world/values a-lists. The 
+count, 3, is the same as before. 
+
+> (fetch '(p ?x c)) 
+(((WO (P . C) (P A C))) 
+((WO (P A ?X)))) 
+3 
+
+So far, worlds have been represented as symbols, with the implication that different 
+symbols represent completely distinct worlds. That doesn't make worlds very easy 
+to use. We would like to be able to use worlds to explore alternatives - create a 
+new hypothetical world, make some assumptions (by asserting them as facts in the 
+hypothetical world), and see what can be derived in that world. It would be tedious 
+to have to copy all the facts from the real world into each hypothetical world. 
+
+An alternative is to establish an inheritance hierarchy among worlds. Then a fact 
+
+is considered true if it is indexed in the current world or in any world that the current 
+
+world inherits from. 
+
+To support inheritance, we will implement worlds as structures with a name field 
+and a field for the list of parents the world inherits from. Searching through the 
+inheritance lattice could become costly, so we will do it only once each time the user 
+changes worlds, and mark all the current worlds by setting the current field on or 
+off. Here is the definition for the world structure: 
+
+(defstruct (world (:print-function print-world)) 
+name parents current) 
+
+We will need a way to get from the name of a world to the world structure. Assuming 
+names are symbols, we can store the structure on the name's property list. The 
+function get-worl d gets the structure for a name, or builds a new one and stores it. 
+get - wor 1 d can also be passed a world instead of a name, in which case it just returns 
+the world. We also include a definition of the default initial world. 
+
+
+<a id='page-500'></a>
+
+(defun get-world (name &optional current (parents (list *world*))) 
+"Look up or create the world with this name. 
+If the world is new, give it the list of parents." 
+(cond ((world-p name) name) ; ok if it already is a world 
+
+((get name 'world)) 
+(t (setf (get name 'world) 
+(make-world rname name .-parents parents 
+.'current current))))) 
+
+(defvar *world* (get-world 'WO nil nil) 
+"The current world used by index and fetch.") 
+
+The function use-worl d is used to switch to a new world. It first makes the current 
+world and all its parents no longer current, and then makes the new chosen world and 
+all its parents current. The function use-new-worl d is more efficient in the common 
+case where you want to create a new world that inherits from the current world. It 
+doesn't have to turn any worlds off; it j ust creates the new world and makes it current. 
+
+(defun use-world (world) 
+"Make this world current." 
+;; If passed a name, look up the world it names 
+(setf world (get-world world)) 
+(unless (eq world *world*) 
+
+Turn the old world(s) off and the new one(s) on, 
+;; unless we are already using the new world 
+(set-world-current *world* nil) 
+(set-world-current world t) 
+(setf *world* world))) 
+
+(defun use-new-world () 
+"Make up a new world and use it. 
+The world inherits from the current world." 
+(setf *world* (get-world (gensym "W"))) 
+(setf (world-current *world*) t) 
+*world*) 
+
+(defun set-world-current (world on/off) 
+"Set the current field of world and its parents on or off." 
+
+nil is off, anything else is on. 
+(setf (world-current world) on/off) 
+(dolist (parent (world-parents world)) 
+
+(set-world-current parent on/off))) 
+
+We also add a print function for worlds, which just prints the world's name. 
+
+
+<a id='page-501'></a>
+(defun print-world (world &optional (stream t) depth) 
+(declare (ignore depth)) 
+(prinl (world-name world) stream)) 
+
+The format of the dtree data base has changed to include worlds, so we need 
+new retrieval functions to search through this new format. Here the functions 
+mapc-retrieve, retrieve, and retrieve-bagof are modified to give new versions 
+that treat worlds. To reflect this change, the new functions all have names ending in 
+
+-in-world: 
+
+(defun mapc-retrieve-in-world (fn query) 
+"For every fact in the current world that matches the query, 
+apply the function to the binding list. " 
+(dolist (bucket (fetch query)) 
+
+(dolist (world/entries bucket) 
+(when (world-current (first world/entries)) 
+(dolist (answer (rest world/entries)) 
+(let ((bindings (unify query answer))) 
+(unless (eq bindings fail) 
+(funcall fn bindings)))))))) 
+
+(defun retrieve-in-world (query) 
+"Find all facts that match query. Return a list of bindings." 
+(let ((answers nil)) 
+
+(mapc-retrieve-in-world 
+#'(lambda (bindings) (push bindings answers)) 
+query) 
+
+answers)) 
+
+(defun retrieve-bagof-in-world (query) 
+"Find all facts in the current world that match query. 
+Return a list of queries with bindings filled in. " 
+(mapcar #'(lambda (bindings) (subst-bindings bindings query)) 
+
+(retrieve-in-world query))) 
+
+Now let's see how these worlds work. First, in WO we see that the facts from 
+test -i ndex are still in the data base: 
+
+> *world* ^ WO 
+
+> (retrieve-bagof-in-world *(p ?z c)) ^ 
+((P A C) (P A C) (P . .) 
+
+
+<a id='page-502'></a>
+
+Now we create and use a new world that inherits from WO. Two new facts are added 
+to this new world: 
+
+> (use-new-world) W7031 
+> (index *(p new c)) => . 
+> (index 'Cp b b)) => . 
+
+We see that the two new facts are accessible in this world: 
+
+> (retrieve-bagof-in-world '(p ?z c)) 
+((P A C) (P A C) (P . C) (P NEW O) 
+
+> (retrieve-bagof-in-world '(^p ?x ?y)) ^ 
+((~P . .)) 
+
+Now we create another world as an alternative to the current one by first switching 
+back to the original WO, then creating the new world, and then adding some facts: 
+
+> (use-world *W0) WO 
+
+> (use-new-world) W7173 
+
+> (index *(p newest c)) ^ . 
+> (index '(~p c newest)) . 
+
+Here we see that the facts entered in W7031 are not accessible, but the facts in the new 
+world and in WO are: 
+
+> (retrieve-bagof-in-world '(p ?z c)) => 
+((P A C) (P A C) (P . C) (P NEWEST O) 
+
+> (retrieve-bagof-in-world '(^p ?x ?y)) 
+ir? C NEWEST)) 
+
+Unification, Equality, Types, and Skolem Constants 
+
+The lesson of the zebra puzzle in section 11.4 was that unification can be used to 
+lessen the need for backtracking, because an uninstantiated logic variable or partially 
+instantiated term can stand for a whole range of possible solutions. However, this 
+advantage can quickly disappear when the representation forces the problem solver 
+to enumerate possible solutions rather than treating a whole range of solutions as one. 
+For example, consider the following query in the frame language and its expansion 
+into primitives: 
+
+
+<a id='page-503'></a>
+(a person (name Fran)) 
+= (and (ind ?p person) (val name ?p fran)) 
+
+The way to answer this query is to enumerate all individuals ?p of type person and 
+then check the name slot of each such person. It would be more efficient if (i nd ?p 
+person) did not act as an enumeration, but rather as a constraint on the possible 
+values of ?p. This would be possible if we changed the definition of variables (and 
+of the unification function) so that each variable had a type associated with it. In 
+fact, there are at least three sources of information that have been implemented as 
+constraints on variables terms: 
+
+* The type or category of the term. 
+* The members or size of a term considered as a set or list. 
+* Other terms this term is equal or not equal to. 
+Note that with a good solution to the problem of equality, we can solve the problem 
+of Skolem constants. The idea is that a regular constant unifies with itself but no 
+other regular constant. On the other hand, a Skolem constant can potentially unify 
+with any other constant (regular or Skolem). The equality mechanism is used to keep 
+track of each Skolem variable's possible bindings. 
+
+14.11 History and References 
+Brachman and Levesque (1985) collect thirty of the key papers in knowledge representation. 
+Included are some early approaches to semantic network based (Quillian 
+1967) and logic-based (McCarthy 1968) representation. Two thoughtful critiques 
+of the ad hoc use of representations without defining their meaning are by Woods 
+(1975) and McDermott (1978). It is interesting to contrast the latter with McDermott 
+1987, which argues that logic by itself is not sufficient to solve the problems of AI. 
+This argument should not be surprising to those who remember the slogan logic = 
+algonthm -control. 
+
+Genesereth and Nilsson's textbook (1987) cover the predicate-calculus-based approach 
+to knowledge representation and AI in general. Ernest Davis (1990) presents 
+a good overview of the field that includes specialized representations for time, space, 
+qualitative physics, propositional attitudes, and the interaction between agents. 
+
+Many representation languages focus on the problem of defining descriptions for 
+categories of objects. These have come to be known as term-subsumption languages. 
+Examples include KL-ONE (Schmolze and Lipkis 1983) and KRYPTON (Brachman, 
+Fikes, and Levesque 1983). See Lakoff 1987 for much more on the problem of 
+categories and prototypes. 
+
+
+<a id='page-504'></a>
+
+Hector Levesque (1986) points out that the areas Prolog has difficulty with - 
+disjunction, negation, and existentials - all involve a degree of vagueness. In his 
+term, they lack vividness. A vivid proposition is one that could be represented 
+directly in a picture: the car is blue; she has a martini in her left hand; Albany is the 
+capital of New York. Nonvivid propositions cannot be so represented: the car is not 
+blue; she has a martini in one hand; either Albany or New York City is the capital 
+of New York. There is interest in separating vivid from nonvivid reasoning, but no 
+current systems are actually built this way. 
+
+The possible world approach of section 14.10 was used in the MRS system (Russell 
+1985). More recent knowledge representation systems tend to use truth maintenance 
+systems instead of possible worlds. This approach was pioneered by Doyle (1979) 
+and McAllester (1982). Doyle tried to change the name to "reason maintenance," in 
+(1983), but it was too late. The version in widest used today is the assumption-based 
+truth maintenance system, or ATMS, developed by de Kleer (1986a,b,c). Charniak 
+et al. (1987) present a complete Common Lisp implementation of a McAllesterstyleTMS. 
+
+
+There is little communication between the logic programming and knowledge 
+representation communities, even though they cover overlapping territory. Colmerauer 
+(1990) and Cohen (1990) describe Logic Programming languages that address 
+some of the issues covered in this chapter. Key papers in equality reasoning include 
+Caller and Fisher 1974, Kornfeld 1983,^ Jaffar, Lassez, and Maher 1984, and van 
+Emden and Yukawa 1987. H&ouml;dobler's book (1987) includes an overview of the area. 
+Papers on extending unification in ways other than equality include Ait-Kaci et al. 
+1987 and Staples and Robinson 1988. Finally, papers on extending Prolog to cover 
+disjunction and negation (i.e., non-Horn clauses) include Loveland 1987, Plaisted 
+1988, and Stickell988. 
+
+14.12 Exercises 
+&#9635; Exercise 14.1 [m] Arrange to store dtrees in a hash table rather than on the property 
+list of predicates. 
+
+&#9635; Exercise 14.2 [m] Arrange to store the dtree-atoms in a hash table rather than in 
+an association list. 
+
+&#9635; Exercise 14.3 [m] Change the dtree code so that .i 1 is used as an atom index. Time 
+the performance on an application and see if the change helps or hurts. 
+
+^ A commentary on this paper appears in Elcock and Hoddinott 1986. 
+
+
+<a id='page-505'></a>
+&#9635; Exercise 14.4 [m] Consider the query (. a b c d e f g). If the index under a 
+returns only one or two keys, then it is probably a waste of time for dtree-fetc h 
+to consider the other keys in the hope of finding a smaller bucket. It is certainly 
+a waste if there are no keys at all indexed under a. Make appropriate changes to 
+dtree-fetch . 
+
+&#9635; Exercise 14.5 [h] Arrange to delete elements from a dtree. 
+
+&#9635; Exercise 14.6 [h] Implement iterative-deepening search in the Prolog compiler. 
+You will have to change each function to accept the depth as an extra argument, and 
+compile in checks for reaching the maximum depth. 
+
+&#9635; Exercise 14.7 [d] Integrate the Prolog compiler with the dtree data base. Use 
+the dtrees for predicates with a large number of clauses, and make sure that each 
+predicate that is implemented as a dtree has a Prolog primitive accessing the dtree. 
+
+&#9635; Exercise 14.8 [d] Add support for possible worlds to the Prolog compiler with 
+dtrees. This support has already been provided for dtrees, but you will have to 
+provide it for ordinary Prolog rules. 
+
+&#9635; Exercise 14.9 [h] Integrate the language described in section 14.10 and the frame 
+syntax from section 14.10 with the extended Prolog compiler from the previous 
+exercise. 
+
+&#9635; Exercise 14.10 [d] Build a strategic reasoner that decides when to create a possible 
+world and does reasoning by cases over these worlds. Use it to solve Moore's problem 
+([page 466](chapter14.md#page-466)). 
+
+
+<a id='page-506'></a>
+
+14.13 Answers 
+Answer 14.1 
+
+(let ((dtrees (make-hash-table :test #'eq))) 
+
+(defun get-dtree (predicate) 
+"Fetch (or make) the dtree for this predicate." 
+(setf (gethash predicate dtrees) 
+
+(or (gethash predicate dtrees) 
+(make-dtree)))) 
+
+(defun clear-dtrees () 
+"Remove all the dtrees for all the predicates." 
+(clrhash dtrees))) 
+
+Answer 14.5 Hint: here is the code for nl i st - del ete. Now figure out how to find 
+all the nlists that an item is indexed under. 
+
+(defun nlist-delete (item nlist) 
+"Remove an element from an nlist . 
+Assumes that item is present exactly once." 
+(decf (car nlist)) 
+(setf (cdr nlist) (delete item (cdr nlist) rcount D) 
+nlist) 
+
+
+## Chapter 15
+<a id='page-509'></a>
+
+Symbolic Mathematics 
+with Canonical Forms 
+
+Anything simple always interests me. 
+
+-David Hockney 
+
+C
+C
+hapter 8 started with high hopes: to take an existing pattern matcher, copy down some 
+mathematical identities out of a reference book, and come up with a usable symbolic 
+algebra system. The resulting system was usable for some purposes, and it showed 
+that the technique of rule-based translation is a powerful one. However, the problems of 
+section 8.5 show that not everything can be done easily and efficiently within the rule-based 
+pattern matching framework. 
+
+There are important mathematical transformations that are difficult to express in the rule-
+based approach. For example, dividing two polynomials to obtain a quotient and remainder is 
+a task that is easier to express as an algorithm - a program - than as a rule or set of rules. 
+
+
+<a id='page-510'></a>
+
+In addition, there is a problem with efficiency. Pieces of the input expressions are 
+simplified over and over again, and much time is spent interpreting rules that do not 
+apply. Section 9.6 showed some techniques for speeding up the program by a factor 
+of 100 on inputs of a dozen or so symbols, but for expressions with a hundred or so 
+symbols, the speed-up is not enough. We can do better by designing a specialized 
+representation from the ground up. 
+
+Serious algebraic manipulation programs generally enforce a notion of canonical 
+simplification. That is, expressions are converted into a canonical internal format that 
+may be far removed from the input form. They are then manipulated, and translated 
+back to external form for output. Of course, the simplifier we have already does this 
+kind of translation, to some degree. It translates (3 + . + -3+ y) into (+ . y) 
+internally, and then outputs it as (. + y). But a canonical representation must have 
+the property that any two expressions that are equal have identical canonical forms. 
+In our system the expression (5 + y + x+ -5)is translated to the internal form (+ 
+y .), which is not identical to (+ x y), even though the two expressions are equal. 
+Thus, our system is not canonical. Most of the problems of the previous section stem 
+from the lack of a canonical form. 
+
+Adhering to canonical form imposes grave restrictions on the representation. For 
+example, -1 and {x -l){x are equal, so they must be represented identically. 
+One way to insure this is to multiply out all factors and collect similar terms. So 
+{x-l){x-\-l)isx^ -x + x-l , which simplifies to x^ -1, in whatever the canonical 
+internal form is. This approach works fine for x^ - 1, but for an expression like 
+{x -1 )1000^ multiplying out all factors would be quite time- (and space-) consuming. 
+It is hard to find a canonical form that is ideal for all problems. The best we can do is 
+choose one that works well for the problems we are most likely to encounter. 
+
+15.1 A Canonical Form for Polynomials 
+This section will concentrate on a canonical form for polynomials. Mathematically 
+speaking, a polynomial is a function (of one or more variables) that can be computed 
+using only addition and multiplication. We will speak of a polynomial's main variable, 
+coefficents, and degree. In the polynomial: 
+
+5xx^-\-hxx^-\-cxx-\-l 
+
+the main variable isx, the degree is 3 (the highest power of x), and the coefficients 
+are 5,6, c and 1. We can define an input format for polynomials as follows: 
+
+1. Any Lisp number is a polynomial. 
+2. Any Lisp symbol is a polynomial. 
+
+<a id='page-511'></a>
+3. lip and q are polynomials, so are (p + ^) and (p* q). 
+4. If . is a polynomial and . is a positive integer, then (p " .) is a polynomial. 
+Hov^ever, the input format cannot be used as the canonical form, because it would 
+admit both (X + y)and(y + x), and both 4 and (2 + 2). 
+
+Before considering a canonical form for polynomials, let us see why polynomials 
+were chosen as the target domain. First, the volume of programming needed to support 
+canonical forms for a larger class of expressions grows substantially. To make 
+things easier, we have eliminated complications like log and trig functions. Polynomials 
+are a good choice because they are closed under addition and multiplication: 
+the sum or product of any two polynomials is a polynomial. If we had allowed division, 
+the result would not be closed, because the quotient of two polynomials need 
+not be a polynomial. As a bonus, polynomials are also closed under differentiation 
+and integration, so we can include those operators as well. 
+
+Second, for sufficiently large classes of expressions it becomes not just difficult 
+but impossible to define a canonical form. This may be surprising, and we don't 
+have space here to explain exactly why it is so, but here is an argument: Consider 
+what would happen if we added enough functionality to duplicate all of Lisp. Then 
+"converting to canonical form" would be the same as "running a program." But it 
+is an elementary result of computability theory that it is in general impossible to 
+determine the result of running an arbitrary program (this is known as the halting 
+problem). Thus, it is not surprising that it is impossible to canonicalize complex 
+expressions. 
+
+Our task is to convert a polynomial as previously defined into some canonical 
+f orm.^ Much of the code and some of the commentary on this format and the routines 
+to manipulate it was written by Richard Fateman, with some enhancements made 
+by Peter Klier. 
+
+The first design decision is to assume that we will be dealing mostly with dense 
+polynomials, rather than sparse ones. That is, we expect most of the polynomials 
+to be like ax^ -f bx^ .-cx -\-d, not like ax^^^ -|-bx^^ -h c. For dense polynomials, 
+we can save space by representing the main variable {x in these examples) and the 
+individual coefficients (a, 6, c, and d in these examples) explicitly, but representing 
+the exponents only implicitly, by position. Vectors will be used instead of Usts, to 
+save space and to allow fast access to any element. Thus, the representation of 
+
++ lOx^ + 20a: + 30 wiU be the vector: 
+#(x 30 20 10 5) 
+
+^ In fact, the algebraic properties of polynomial arithmetic and its generalizations fit so well 
+with ideas in data abstraction that an extended example (in Scheme) on this topic is provided 
+inStructure and Interpretation of Computer Programs by Abelson and Sussman (see section 2.4.3, 
+pages 153-166). We'll pursue a slightly different approach here. 
+
+
+<a id='page-512'></a>
+
+The main variable, x, is in the 0th element of the vector, and the coefficient of the 
+ith power of x is in element i + 1 of the vector. A single variable is represented as a 
+vector whose first coefficient is 1, and a number is represented as itself: 
+
+#(x 30 20 10 5) represents5x^ + lOx^ + 20x + 30 
+
+#(x 0 1) representsX 
+
+5 represents 5 
+
+The fact that a number is represented as itself is a possible source of confusion. The 
+number 5, for example, is a polynomial by our mathematical definition of polynomials. 
+But it is represented as 5, not as a vector, so (typep 5 ' pol ynomi al) will be 
+false. The word "polynomial" is used ambiguously to refer to both the mathematical 
+concept and the Lisp type, but it should be clear from context which is meant. 
+
+A glossary for the canonical simplifier program is given in figure 15.1. 
+
+The functions defining the type polynomial follow. Because we are concerned 
+with efficiency, we proclaim certain short functions to be compiled inline, use the 
+specific function svref (simple-vector reference) rather than the more general aref, 
+and provide declarations for the polynomials using the special form the. More details 
+on efficiency issues are given in Chapter 9. 
+
+(proclaim '(inline main-var degree coef 
+var= var> poly make-poly)) 
+
+(deftype polynomial () 'simple-vector) 
+
+(defun main-var (p) (svref (the polynomial p) 0)) 
+
+(defun coef (p i) (svref (the polynomial p) (+ i 1))) 
+
+(defun degree (p) (- (length (the polynomial p)) 2)) 
+
+We had to make another design decision in defining coef, the function to extract a 
+coefficient from a polynomial. As stated above, the zth coefficient of a polynomial is 
+in element i + 1 of the vector. If we required the caller of coef to pass in . .-1 to get 
+2, we might be able to save a few addition operations. The design decision was that 
+this would be too confusing and error prone. Thus, coef expects to be passed i and 
+does the addition itself. 
+
+For our format, we will insist that main variables be symbols, while coefficients 
+can be numbers or other polynomials. A "production" version of the program might 
+have to account for main variables like (sin .), as well as other complications like + 
+and * with more than two arguments, and noninteger powers. 
+
+Now we can extract information from a polynomial, but we also need to build 
+and modify polynomials. The function poly takes a variable and some coefficients 
+and builds a vector representing the polynomial, make-pol y takes a variable and a 
+degree and produces a polynomial with all zero coefficients. 
+
+
+<a id='page-513'></a>
+canon-simplifier 
+canon 
+
+polynomial 
+
+prefix->canon 
+canon->prefix 
+poly+poly 
+poly*poly 
+poly^n 
+deriv-poly 
+
+poly 
+make-poly 
+coef 
+main-var 
+degree 
+var= 
+var> 
+poly-ipoly-
+k->-poly 
+k*poly 
+poly+same 
+poly*same 
+normalize-poly 
+exponent->prefix 
+args->prefix 
+rat-numerator 
+rat-denominator 
+rat*rat 
+rat->-rat 
+rat/rat 
+
+Top-Level Fimctions 
+A read-canonicalize-print loop. 
+Canonicalize argument and convert it back to infix. 
+Data Types 
+A vector of main variable and coefficients. 
+Major Functions 
+Convert a prefix expression to canonical polynomial. 
+Convert a canonical polynomial to a prefix expression. 
+Add two polynomials. 
+Multiply two polynomials. 
+Raise polynomial . to the nth power, n>=0. 
+Return the derivative, dp/dx, of the polynomial p. 
+Auxiliary Fimctions 
+Construct a polynomial with given coefficients. 
+Construct a polynomial of given degree. 
+Pick out the ith coefficient of a polynomial. 
+The main variable of a polynomial. 
+Thedegreeof a polynomial; (degree x^) = 2. 
+Are two variables identical? 
+Is one variable ordered before another? 
+Unary or binary polynomial addition. 
+Unary or binary polynomial subtraction. 
+Add a constant k to a polynomial p. 
+Multiply a polynomial . by a constant k. 
+Add two polynomials with the same main variable. 
+Multiply two polynomials with the same main variable. 
+Alter a polynomial by dropping trailing zeros. 
+Used to convert to prefix. 
+Used to convert to prefix. 
+Select the numerator of a rational. 
+
+Select the denominator of a rational. 
+Multiply two rationals. 
+Add two rationals. 
+Divide two rationals. 
+
+Figure 15.1: Glossary for the Symbolic Manipulation Program 
+
+
+<a id='page-514'></a>
+
+(defun poly (x &rest coefs) 
+"Make a polynomial with main variable . 
+and coefficients in increasing order." 
+(apply #.vector . coefs)) 
+
+(defun make-poly (x degree) 
+"Make the polynomial 0 + 0*x + 0*x''2 + ... 0*x"degree" 
+(let ((p (make-array (+ degree 2) :initial-element 0))) 
+
+(setf (main-var p) x) 
+
+P)) 
+
+A polynomial can be altered by setting its main variable or any one of its coefficients 
+using the following defsetf forms. 
+
+(defsetf main-var (p) (val) 
+*(setf (svref (the polynomial ,p) 0) ,val)) 
+
+(defsetf coef (p i) (val) 
+
+'(setf (svref (the polynomial ,p) (+ .i D) .val)) 
+The function pol y constructs polynomials in a fashion similar to 1 i st or vector: with 
+an explicit list of the contents, make-poly, on the other hand, is like make-a may: it 
+makes a polynomial of a specified size. 
+
+We provide setf methods for modifying the main variable and coefficients. Since 
+this is the first use of defsetf, it deserves some explanation. A defsetf form takes 
+a function (or macro) name, an argument list, and a second argument list that must 
+consist of a single argument, the value to be assigned. The body of the form is an 
+expression that stores the value in the proper place. So the defsetf for ma 1 .- va r says 
+that (setf (main-var p) val) is equivalent to (setf (svref (the polynomial p) 
+
+0) val). A defsetf is much like a defmacro, but there is a little less burden placed 
+on the writer of defsetf. Instead of passing . and val directly to the setf method. 
+Common Lisp binds local variables to these expressions, and passes those variables 
+to the setf method. That way, the writer does not have to worry about evaluating 
+the expressions in the wrong order or the wrong number of times. It is also possible 
+to gain finer control over the whole process with def i ne-setf-method, as explained 
+on [page 884](chapter25.md#page-884). 
+The functions poly+poly, poly*poly and poly'n perform addition, multiplication, 
+and exponentiation of polynomials, respectively. They are defined with several 
+helping functions. k*poly multipHes a polynomial by a constant, k, which may 
+be a number or another polynomial that is free of polynomial p's main variable. 
+poly*same is used to multiply two polynomials with the same main variable. For 
+addition, the functions k+poly and poly+same serve analogous purposes. With that 
+in mind, here's the function to convert from prefix to canonical form: 
+
+
+<a id='page-515'></a>
+(defun prefix->canon (x) 
+"Convert a prefix Lisp expression to canonical form. 
+Exs; (+ X 2) (* 3 x)) => #(x 0 3 1) 
+
+(- (* (-X 1) (+ X D) (- (^ X 2) D) => 0" 
+
+(cond ((numberp x) x) 
+((symbolp x) (poly . 0 D) 
+((and (exp-p x) (get (exp-op x) 'prefix->canon)) 
+
+(apply (get (exp-op x) 'prefix->canon) 
+(mapcar #'prefix->canon (exp-args x)))) 
+(t (error "Not a polynomial: ~a" x)))) 
+
+It is data-driven, based on the pref ix->canon property of each operator. In the 
+following we install the appropriate functions. The existing functions poly*poly 
+and poly'n can be used directly. But other operators need interface functions. The 
+operators + and - need interface functions that handle both unary and binary. 
+
+(dolist (item '((+ poly+) (- poly-) (* poly*poly) 
+(" poly^n) (D deriv-poly))) 
+(setf (get (first item) *prefix->canon) (second item))) 
+
+(defun poly+ (&rest args) 
+"Unary or binary polynomial addition." 
+(ecase (length args) 
+
+(1 (first args)) 
+
+(2 (poly+poly (first args) (second args))))) 
+
+(defun poly- (&rest args) 
+"Unary or binary polynomial subtraction." 
+(ecase (length args) 
+
+(1 (poly*poly -1 (first args))) 
+(2 (poly+poly (first args) (poly*poly -1 (second args)))))) 
+
+The function pref ix->canon accepts inputs that were not part of our definition of 
+polynomials: unary positive and negation operators and binary subtraction and 
+differentiation operators. These are permissible because they can all be reduced to 
+the elementary + and * operations. 
+
+Remember that our problems with canonical form all began with the inability to 
+decide which was simpler: (+ . y) or (+ y .). In this system, we define a canonical 
+form by imposing an ordering on variables (we use alphabetic ordering as defined by 
+stri ng>). The rule is that a polynomial . can have coefficients that are polynomials 
+in a variable later in the alphabet than p's main variable, but no coefficients that 
+are polynomials in variables earlier than p's main variable. Here's how to compare 
+variables: 
+
+(defun var= (x y) (eq . y)) 
+(defun var> (x y) (string> . y)) 
+
+
+<a id='page-516'></a>
+
+The canonical form of the variable . will be #(x 0 1), which is 0 x x<sup>0</sup> + 1 x x<sup>1</sup>. The 
+canonical form of (+ . y) is #(x #(y 0 1) 1). It couldn't be #(y #(x 0 1) 1), 
+because then the resulting polynomial would have a coefficient with a lesser main 
+variable. The policy of ordering variables assures canonicality, by properly grouping 
+like variables together and by imposing a particular ordering on expressions that 
+would otherwise be commutative. 
+
+Here, then, is the code for adding two polynomials: 
+
+(defun poly+poly (p q) 
+"Add two polynomials." 
+(normal ize-poly 
+
+(cond 
+((numberp p) (k+poly . q)) 
+((numberp q) (k+poly q p)) 
+((var= (main-var p) (main-var q)) (poly+same . q)) 
+((var> (main-var q) (main-var p)) (k+poly q p)) 
+(t (k+poly . q))))) 
+
+(defun k+poly (k p) 
+"Add a constant k to a polynomial p." 
+(cond ((eql k 0) p) 0 + . = . 
+
+((and (numberp k)(numberp p)) 
+(+ k p)) Add numbers 
+
+(t (let ((r (copy-poly p))) Add k to x"0 term of . 
+(setf (coef r 0) (poly+poly (coef r 0) k)) 
+r)))) 
+
+(defun poly+same (p q) 
+"Add two polynomials with the same main variable." 
+First assure that q is the higher degree polynomial 
+
+(if (> (degree p) (degree q)) 
+(poly+same q p) 
+;; Add each element of . into r (which is a copy of q). 
+(let ((r (copy-poly q))) 
+
+(loop for i from 0 to (degree p) do 
+(setf (coef r i) (poly+poly (coef r i) (coef . i)))) 
+r))) 
+
+(defun copy-poly (p) 
+"Make a copy a polynomial." 
+(copy-seq p)) 
+
+
+<a id='page-517'></a>
+and the code for multiplying polynomials: 
+
+(defun poly*poly (p q) 
+"Multiply two polynomials." 
+(normal ize-poly 
+
+(cond 
+((numberp p) (k*poly . q)) 
+((numberp q) (k*poly q p)) 
+((var= (main-var p) (main-var q)) (poly*same . q)) 
+((var> (main-var q) (main-var p)) (k*poly q p)) 
+(t (k*poly . q))))) 
+
+(defun k*poly (k p) 
+"Multiply a polynomial . by a constant factor k." 
+(cond 
+
+((eql k 0) 0) ;; 0 * . = 0 
+((eql k 1) p) ;; 1 * . = . 
+((and (numberp k) 
+
+(numberp p)) (* k p)) Multiply numbers 
+(t Multiply each coefficient 
+(let ((r (make-poly (main-var p) (degree p)))) 
+Accumulate result in r; rCi] = k*pCi] 
+(loop for i from 0 to (degree p) do 
+(setf (coef r i) (poly*poly k (coef . i)))) 
+r)))) 
+
+The hard part is multiplying two polynomials with the same main variable. This 
+is done by creating a new polynomial, r, whose degree is the sum of the two input 
+polynomials . and q. Initially, all of r's coefficients are zero. A doubly nested 
+loop multiplies each coefficient of . and q and adds the result into the appropriate 
+coefficient of r. 
+
+(defun poly*same (p q) 
+"Multiply two polynomials with the same variable." 
+rCi] = pCO]*qCi] + pCl]*qCi-l] + ... 
+(let* ((r-degree (+ (degree p) (degree q))) 
+(r (make-poly (main-var p) r-degree))) 
+(loop for i from 0 to (degree p) do 
+(unless (eql (coef . i) 0) 
+(loop for j from 0 to (degree q) do 
+(setf (coef r (+ i j)) 
+(poly+poly (coef r (+ i j)) 
+(poly*poly (coef . i) 
+(coef q j))))))) 
+r)) 
+
+
+<a id='page-518'></a>
+
+Both poly+poly and poly*poly make use of the function normal ize-poly to "normalize" 
+the result. The idea is that (- . 5) (". 5)) should return O, not 
+#(xOOOOOO). Note that normal ize-poly is a destructive operation: it calls 
+del ete, which can actually alter its argument. Normally this is a dangerous thing, 
+but since norma1 i ze - poly is replacing something with its conceptual equal, no harm 
+is done. 
+
+(defun normalize-poly (p) 
+"Alter a polynomial by dropping trailing zeros." 
+(if (numberp p) 
+
+. 
+(let ((p-degree (- (position 0 . itest (complement #'eql) 
+:from-end t) 
+1))) 
+(cond ((<= p-degree 0) (normalize-poly (coef . 0))) 
+((< p-degree (degree p)) 
+(delete 0 . .-start p-degree)) 
+(t p))))) 
+
+There are a few loose ends to clean up. First, the exponentiation function: 
+
+(defun poly'n (p n) 
+"Raise polynomial . to the nth power, n>=0." 
+(check-type . (integer 0 *)) 
+(cond ((= . 0) (assert (not (eql . 0))) 1) 
+
+((integerp p) (expt . .)) 
+(t (poly*poly . (poly^n . (-. 1)))))) 
+
+15.2 Differentiating Polynomials 
+The differentiation routine is easy, mainly because there are only two operators (+ 
+and *) to deal with: 
+
+(defun deriv-poly (p x) 
+"Return the derivative, dp/dx, of the polynomial p." 
+;; If . is a number or a polynomial with main-var > x, 
+
+then . is free of x, and the derivative is zero; 
+;; otherwise do real work. 
+;; But first, make sure X is a simple variable, 
+;; of the form #(X 0 1). 
+(assert (and (typep . 'polynomial) (= (degree x) 1) 
+
+(eql (coef . 0) 0) (eql (coef . 1) 1))) 
+
+
+<a id='page-519'></a>
+
+(cond 
+((numberp p) 0) 
+((var> (main-var p) (main-var x)) 0) 
+((var= (main-var p) (main-var x)) 
+
+d(a + bx + cx^2 + dx^3)/dx = b + 2cx + 3dx'^2 
+
+So, shift the sequence . over by 1, then 
+;; put . back in, and multiply by the exponents 
+(let ((r (subseq . 1))) 
+
+(setf (main-var r) (main-var x)) 
+(loop for i from 1 to (degree r) do 
+(setf (coef r i) (poly*poly (+ i 1) (coef r i)))) 
+(normalize-poly r))) 
+
+(t Otherwise some coefficient may contain x. Ex: 
+d(z + 3x + 3zx^2 + z^2x^3)/dz 
+= 1 + 0 + 3x'^2 + 2zx"3 
+So copy p, and differentiate the coefficients, 
+
+(let ((r (copy-poly p))) 
+(loop for i from 0 to (degree p) do 
+(setf (coef r i) (deriv-poly (coef r i) x))) 
+(normalize-poly r))))) 
+
+&#9635; Exercise 15.1 [h] Integrating polynomials is not much harder than differentiating 
+them. For example: 
+
+&int; ax<sup>2</sup> + bx dx = ax<sup>3</sup>/3 + bx<sup>2</sup>/2 + c.
+
+Write a function to integrate polynomials and install it in pref ix->canon. 
+
+&#9635; Exercise 15.2 [m] Add support for definite integrals, such as y dx. You will 
+need to make up a suitable notation and properly install it in both infix->prefix 
+and prefix->canon. A full implementation of this feature would have to consider 
+infinity as a bound, as well as the problem of integrating over singularities. You need 
+not address these problems. 
+
+15.3 Converting between Infix and Prefix 
+All that remains is converting from canonical form back to prefix form, and from 
+there back to infix form. This is a good point to extend the prefix form to allow 
+expressions with more than two arguments. First we show an updated version of 
+pref i x->i nf i . that handles multiple arguments: 
+
+
+<a id='page-520'></a>
+
+(defun prefix->infix (exp) 
+"Translate prefix to infix expressions. 
+Handles operators with any number of args." 
+(if (atom exp) 
+
+exp 
+
+(intersperse 
+(exp-op exp) 
+(mapcar #'prefix->infix (exp-args exp))))) 
+
+(defun intersperse (op args) 
+"Place op between each element of args. 
+Ex: (intersperse '+ '(a b c)) => '(a + b + c)" 
+(if (length=1 args) 
+
+(first args) 
+
+(rest (loop for arg in args 
+collect op 
+collect arg)))) 
+
+Now we need only convert from canonical form to prefix: 
+
+(defun canon->prefix (p) 
+"Convert a canonical polynomial to a lisp expression." 
+(if (numberp p) 
+
+. 
+
+(args->prefix 
+'+ 0 
+(loop for i from (degree p) downto 0 
+
+collect (args->prefix 
+'* 1 
+(list (canon->prefix (coef pi)) 
+
+(exponent->prefix 
+(main-var p) i))))))) 
+
+(defun exponent->prefix (base exponent) 
+"Convert canonical base^exponent to prefix form." 
+(case exponent 
+
+(0 1) 
+(1 base) 
+(t *(" .base .exponent)))) 
+
+(defun args->prefix (op identity args) 
+"Convert argl op arg2 op ... to prefix form." 
+(let ((useful-args (remove identity args))) 
+
+(cond ((null useful-args) identity) 
+((and (eq op '*) (member 0 args)) 0) 
+((length=1 args) (first useful-args)) 
+(t (cons op (mappend 
+
+#*(lambda (exp) 
+
+
+<a id='page-521'></a>
+(if (starts-with exp op) 
+(exp-args exp) 
+(list exp))) 
+
+useful-args)))))) 
+
+Finally, here's a top level to make use of all this: 
+
+(defun canon (infix-exp) 
+"Canonicalize argument and convert it back to infix" 
+(prefix->infix 
+
+(canon->prefix 
+(prefix->canon 
+(infix->prefix infix-exp))))) 
+
+(defun canon-simplifier () 
+"Read an expression, canonicalize it. and print the result." 
+(loop 
+
+(print 'canon>) 
+(print (canon (read))))) 
+
+and an example of it in use: 
+
+> (canon-simplifier) 
+CANON> (3 + X + 4 - X) 
+7 
+CANON> (X + y + y + X) 
+((2 * .) + (2 * Y)) 
+CANON> (3 * X + 4 * X) 
+(7 * X) 
+CANON> (3*x + y + x + 4*x) 
+((8 * X) + Y) 
+CANON> (3*x + y + z + x + 4*x) 
+((8 * X) + (Y + Z)) 
+CANON> ((X + 1) ^ 10) 
+((X ^ 10) + (10 * (X ^ 9)) + (45 * (X ^ 8)) + (120 * (X ^ 7)) 
+
++ (210 * (X ^ 6)) + (252 * (X ^ 5)) + (210 * (X ^ 4)) 
++ (120 * (X 3)) + (45 * (X ^ 2)) + (10 * X) + 1) 
+CAN0N> ((X + 1) 10 + (X - 1) ^ 10) 
+((2 * (X ^ 10)) + (90 * (X ^ 8)) + (420 * (X ^ 6)) 
++ (420 * (X ^ 4)) + (90 * (X ^ 2)) + 2) 
+CAN0N> ((X + 1) ^ 10 - (X - 1) ^ 10) 
+((20 * (X ^ 8)) + (240 * (X ^ 7)) + (504 * (X ^ 5)) 
++ (240 * (X ^ 3)) + (20 * X)) 
+CAN0N> (3 * X ^ 3 + 4 * X * y * (X - 1) + X ^ 2 * (X + y)) 
+((4 * (X ^ 3)) + ((5 * Y) * (X ^ 2)) + ((-4 * Y) * X)) 
+CAN0N> (3*x^3 + 4*x*w*(x-l)+x^2*( x + w)) 
+((((5 * (X ^ 2)) + (-4 * X)) * W) + (4 * (X ^ 3))) 
+
+<a id='page-522'></a>
+
+CANON> (d (3 * X ^ 2 + 2 * X + 1) / d X) 
+((6 * X) + 2) 
+CANON> (d(z +3*x+3*z*x^2+z^2*x^3)/dz) 
+(((2 * Z) * (X ^ 3)) + (3 * (X ^ 2)) + 1) 
+CANON> [Abort] 
+
+15.4 Benchmarking the Polynomial Simplifier 
+Unlike the rule-based program, this version gets all the answers right. Not only is the 
+program correct (at least as far as these examples go), it is also fast. We can compare 
+it to the canonical simplifier originally written for MACSYMA by William Martin (circa 
+1968), and modified by Richard Fateman. The modified version was used by Richard 
+Gabriel in his suite of Common Lisp benchmarks (1985). The benchmark program 
+is called f rpo1y, because it deals with polynomials and was originally written in 
+the dialect Franz Lisp. The f rpoly benchmark encodes polynomials as lists rather 
+than vectors, and goes to great lengths to be efficient. Otherwise, it is similar to the 
+algorithms used here (although the code itself is quite different, using progs and gos 
+and other features that have fallen into disfavor in the intervening decades). The 
+particular benchmark we will use here is raising 1-\- . -\-y -\-ziothe 15th power: 
+
+(defun rl5-test () 
+
+(let ((r (prefix->canon *(+ 1 (+ . (+ y .)))))) 
+
+(time (poly^n r 15)) 
+
+nil)) 
+
+This takes .97 seconds on our system. The equivalent test with the original f rpoly 
+code takes about the same time: .98 seconds. Thus, our program is as fast as 
+production-quaUty code. In terms of storage space, vectors use about half as much 
+storage as lists, because half of each cons cell is a pointer, while vectors are all useful 
+data.2 
+
+How much faster is the polynomial-based code than the rule-based version? 
+Unfortunately, we can't answer that question directly. We can time (simp ' ((1 
+
++ x+ y + z) " 15))). This takes only a tenth of a second, but that is because 
+it is doing no work at all - the answer is the same as the input! Alternately, we 
+can take the expression computed by (poly^n r 15), convert it to prefix, and pass 
+that to simpli fy. simpl i fy takes 27.8 seconds on this, so the rule-based version is 
+^Note: systems that use ''cdr-coding" take about the same space for lists that are allocated 
+all at once as for vectors. But cdr-coding is losing favor as RISC chips replace microcoded 
+processors. 
+
+
+<a id='page-523'></a>
+much slower. Section 9.6 describes ways to speed up the rule-based program, and a 
+comparison of timing data appears on [page 525](chapter15.md#page-525). 
+
+There are always surprises when it comes down to measuring timing data. For 
+example, the alert reader may have noticed that the version of pol y defined above 
+requires . multiplications. Usually, exponentiation is done by squaring a value when 
+the exponent is even. Such an algorithm takes only log. multiplications instead of 
+
+n. We can add a line to the definition of poly to get an 0(log n) algorithm: 
+(defun poly^n (p n) 
+"Raise polynomial . to the nth power. n>=0." 
+(check-type . (integer 0 *)) 
+(cond ((= . 0) (assert (not (eql . 0))) 1) 
+
+((integerp p) (expt . n)) 
+((evenp n) (poly^2 (poly^n . (/ . 2)))) 
+(t (poly*poly . (poly^n . (-. 1)))))) 
+
+(defun poly"2 (p) (poly*poly . .)) 
+
+The surprise is that this takes longer to raise *r* to the 15th power. Even though it 
+does fewer pol y*pol y operations, it is doing them on more complex arguments, and 
+there is more work altogether. If we use this version of poly'n, then rl5-test takes 
+
+1.6seconds instead of .98 seconds. 
+By the way, this is a perfect example of the conceptual power of recursive functions. 
+We took an existing function, poly "n, added a single cond clause, and changed 
+it from an 0(n) to O(logn) algorithm. (This turned out to be a bad idea, but that's 
+beside the point. It would be a good idea for raising integers to powers.) The reasoning 
+that allows the change is simple: First, is certainly equal to (p^^^^)^ when 
+. is even, so the change can't introduce any wrong answers. Second, the change 
+continues the policy of decrementing . on every recursive call, so the function must 
+eventually terminate (when . = 0). If it gives no wrong answers, and it terminates, 
+then it must give the right answer. 
+
+In contrast, making the change for an iterative algorithm is more complex. The 
+initial algorithm is simple: 
+
+(defun poly^n (p n) 
+
+(let ((result D) 
+(loop repeat . do (setf result (poly*poly . result))) 
+result)) 
+
+But to change it, we have to change the repeat loop to a whi 1 e loop, explicitly put in 
+the decrement of n, and insert a test for the even case: 
+
+
+<a id='page-524'></a>
+
+(defun poly^n (p n) 
+(let ((result D) 
+(loop while (> . 0) 
+do (if (evenp n) 
+(setf . (poly^2 p) 
+. (/ . 2)) 
+(setf result (poly*poly . result) 
+. (- . 1)))) 
+result)) 
+
+For this problem, it is clear that thinking recursively leads to a simpler function that 
+is easier to modify. 
+
+It turns out that this is not the final word. Exponentiation of polynomials can be 
+done even faster, with a little more mathematical sophistication. Richard Fateman's 
+1974 paper on Polynomial Multiplication analyzes the complexity of a variety of 
+exponentiation algorithms. Instead of the usual asymptotic analysis (e.g. 0(n) 
+or (9(n^)), he uses a fine-grained analysis that computes the constant factors (e.g. 
+1000 X . or 2 X n^). Such analysis is crucial for small values of n. It turns out that for a 
+variety of polynomials, an exponentiation algorithm based on the binomial theorem 
+is best. The binomial theorem states that 
+
+(a + b)<sup>n = &Sigma; TK
+
+
+i=0 
+
+for example. 
+
+(a + b)<sup>3</sup> = b<sup>3</sup> + 3ab<sup>2</sup> + 3a<sup>2</sup> + a<sup>3</sup>
+
+We can use this theorem to compute a power of a polynomial all at once, instead 
+of computing it by repeated multiplication or squaring. Of course, a polynomial will 
+in general be a sum of more than two components, so we have to decide how to split it 
+into the a and b pieces. There are two obvious ways: either cut the polynomial in half, 
+so that a and 6 will be of equal size, or split off one component at a time. Fateman 
+shows that the latter method is more efficient in most cases. In other words, a 
+polynomial k^x'^ -fk2x'^~~^ +k^x^''^ -h . . will be treated as the sum a + b where 
+a = k\x'^ and b is the rest of the polynomial. 
+
+Following is the code for binomial exponentiation. It is somewhat messy, because 
+the emphasis is on efficiency. This means reusing some data and using . - add - i nto 1 
+instead of the more general poly+poly. 
+
+(defun poly'^n (p n) 
+
+"Raise polynomial . to the nth power, n>=0." 
+
+;; Uses the binomial theorem 
+
+(check-type . (integer 0 *)) 
+
+(cond 
+
+((= . 0) 1) 
+
+
+<a id='page-525'></a>
+((integerp p) (expt . .)) 
+(t ;; First: split the polynomial . = a + b, where 
+a = k*x^d and b is the rest of . 
+(let ((a (make-poly (main-var p) (degree p))) 
+(b (normalize-poly (subseq . 0 (- (length p) 1)))) 
+
+Allocate arrays of powers of a and b: 
+(a^n (make-array (+ . 1))) 
+(b^n (make-array {+ . 1))) 
+
+Initialize the result: 
+
+(result (make-poly (main-var p) (* (degree p) n)))) 
+(setf (coef a (degree p)) (coef . (degree p))) 
+;; Second: Compute powers of a^i and b^i for i up to . 
+(setf (aref a^n 0) 1) 
+(setf (aref b^n 0) 1) 
+(loop for i from 1 to . do 
+
+(setf (aref a^n i) (poly*poly a (aref a^n (- i 1)))) 
+(setf (aref b^n i) (poly*poly b (aref b^n (-i 1))))) 
+;; Third: add the products into the result. 
+so that resultCi] = (n choose i) * a'^i * b"(n-i) 
+(let ((c 1)) c helps compute (n choose i) incrementally 
+(loop for i from 0 to . do 
+(p-add-into! result c 
+(poly*poly (aref a'^n i) 
+(aref b^n (- . i)))) 
+(setf c (/ (* c (- . i)) (+ i 1))))) 
+(normalize-poly result))))) 
+
+(defun p-add-into! (result c p) 
+"Destructively add c*p into result." 
+(if (or (numberp p) 
+
+(not (var= (main-var p) (main-var result)))) 
+(setf (coef result 0) 
+(poly+poly (coef result 0) (poly*poly c p))) 
+(loop for i from 0 to (degree p) do 
+(setf (coef result i) 
+(poly+poly (coef result i) (poly*poly c (coef . i)))))) 
+result) 
+
+Using this version of pol y "n, rl5 - test takes only .23 seconds, four times faster than 
+the previous version. The following table compares the times for rl5 -test with 
+the three versions of poly'n, along with the times for applying simply to the rl5 
+polynomial, for various versions of s i mpl i f y: 
+
+
+<a id='page-526'></a>
+
+program sees speed-up 
+rule-based versions 
+1 original 27.8 -2 memoization 7.7 4 
+3 memo+index 4.0 7 
+4 compilation only 2.5 11 
+5 memo+compilation 1.9 15 
+canonical versions 
+6 squaring pol y'n 1.6 17 
+7 iterative poly' n .98 28 
+8 binomial poly' n .23 120 
+
+As we remarked earlier, the general techniques of memoization, indexing, and 
+compilation provide for dramatic speed-ups. However, in the end, they do not lead 
+to the fastest program. Instead, the fastest version was achieved by throwing out the 
+original rule-based program, replacing it with a canonical-form-based program, and 
+fine-tuning the algorithms within that program, using mathematical analysis. 
+
+Now that we have achieved a sufficiently fast system, the next two sections 
+concentrate on making it more powerful. 
+
+15.5 A Canonical Form for Rational Expressions 
+A rational number is defined as a fraction: the quotient of two integers. A rational 
+expression is hereby defined as the quotient of two polynomials. This section presents 
+a canonical form for rational expressions. 
+
+First, a number or polynomial will continue to be represented as before. The 
+quotient of two polynomials will be represented as a cons cells of numerator and 
+denominator pairs. However, just as Lisp automatically reduces rational numbers 
+to simplest form (6/8 is represented as 3/4), we must reduce rational expressions. 
+So, for example, {x^ -l)/{x -1) must be reduced to . + 1, not left as a quotient of 
+two polynomials. 
+
+The following functions build and access rational expressions but do not reduce 
+to simplest form, except in the case where the denominator isa number. Building up 
+the rest of the functionality for full rational expressions is left to a series of exercises: 
+
+(defun make-rat (numerator denominator) 
+
+"Build a rational: a quotient of two polynomials." 
+
+(if (numberp denominator) 
+
+(k*poly (/ 1 denominator) numerator) 
+
+(cons numerator denominator))) 
+
+
+<a id='page-527'></a>
+(defun rat-numerator (rat) 
+"The numerator of a rational expression." 
+(typecase rat 
+
+(cons (car rat)) 
+(number (numerator rat)) 
+(t rat))) 
+
+(defun rat-denominator (rat) 
+"The denominator of a rational expression.' 
+(typecase rat 
+
+(cons (cdr rat)) 
+(number (denominator rat)) 
+(t 1))) 
+
+&#9635; Exercise 15.3 [s] Modify pref i x->canon to accept input of the form . / y and to 
+return rational expressions instead of polynomials. Also allow for input of the form 
+. " - n. 
+
+&#9635; Exercise 15.4 [m] Add arithmetic routines for multiplication, addition, and division 
+of rational expressions. Call them rat*rat, rat+rat, and rat/rat respectively. 
+They will call upon poly*poly. poly+poly and a new function, pol y/poly, which is 
+defined in the next exercise. 
+
+&#9635; Exercise 15.5 [h] Define poly-gcd, which computes the greatest common divisor 
+of two polynomials. 
+
+&#9635; Exercise 15.6 [h] Using poly-gcd, define the function pol y/poly, which will implement 
+division for polynomials. Polynomials are closed under addition and multiplication, 
+so poly+poly and poly*poly both returned polynomials. Polynomials are 
+not closed under division, so pol y /pol y will return a rational expression. 
+
+15.6 Extending Rational Expressions 
+Now that we can divide polynomials, the final step is to reinstate the logarithmic, 
+exponential, and trigonometric functions. The problem is that if we allow all these 
+functions, we get into problems with canonical form again. For example, the following 
+three expressions are all equivalent: 
+
+
+<a id='page-528'></a>
+
+sin(x) 
+
+cos (x- ^) 
+
+2i 
+
+If we are interested in assuring we have a canonical form, the safest thing is to 
+allow only and log(x). All the other functions can be defined in terms of these two. 
+With this extension, the set of expressions we can form is closed under differentiation, 
+and it is possible to canonicalize expressions. The result is a mathematically sound 
+construction known as a differentiable field. This is precisely the construct that is 
+assumed by the Risch integration algorithm (Risch 1969,1979). 
+
+The disadvantage of this minimal extension is that answers may be expressed in 
+unfamiliar terms. The user asks for d sin(x^)/dx, expecting a simple answer in terms 
+of cos, and is surprised to see a complex answer involving e*^. Because of this problem, 
+most computer algebra systems have made more radical extensions, allowing 
+sin, cos, and other functions. These systems are treading on thin mathematical ice. 
+Algorithms that would be guaranteed to work over a simple differentiable field may 
+fail when the domain is extended this way. In general, the result will not be a wrong 
+answer but rather the failure to find an answer at all. 
+
+15.7 History and References 
+A brief history of symbolic algebra systems is given in chapter 8. Fateman (1979), 
+Martin and Fateman (1971), and Davenport et al. (1988) give more details on the MACSYMA 
+system, on which this chapter is loosely based. Fateman (1991) discusses the 
+frpoly benchmark and introduces the vector implementation used in this chapter. 
+
+15.8 Exercises 
+&#9635; Exercise 15.7 [h] Implement an extension of the rationals to include logarithmic, 
+exponential, and trigonometric functions. 
+
+&#9635; Exercise 15.8 [m] Modify deri . to handle the extended rational expressions. 
+
+&#9635; Exercise 15.9 [d] Adapt the integration routine from section 8.6 ([page 252](chapter8.md#page-252)) to the 
+rational expression representation. Davenport et al. 1988 may be useful. 
+
+
+<a id='page-529'></a>
+
+&#9635; Exercise 15.10 [s] Give several reasons why constant polynomials, like 3, are represented 
+as integers rather than as vectors. 
+
+15.9 Answers 
+Answer 15.4 
+
+(defun rat*rat (x y) 
+"Multiply rationals: a/b * c/d= a*c/b*d" 
+(poly/poly (poly*poly (rat-numerator x) 
+
+(rat-numerator y)) 
+(poly*poly (rat-denominator x) 
+(rat-denominator y)))) 
+
+(defun rat+rat (x y) 
+"Add rationals: a/b + c/d= (a*d + c*b)/b*d" 
+(let ((a (rat-numerator x)) 
+
+(b (rat-denominator x)) 
+(c (rat-numerator y)) 
+(d (rat-denominator y))) 
+
+(poly/poly (poly+poly (poly*poly a d) (poly*poly c b)) 
+(poly*poly b d)))) 
+
+(defun rat/rat (x y) 
+"Divide rationals: a/b / c/d= a*d/b*c" 
+(rat*rat . (make-rat (rat-denominator y) (rat-numerator y)))) 
+
+Answer 15.6 
+
+(defun poly/poly (p q) 
+"Divide . by q: if d is the greatest common divisor of . and q 
+then p/q = (p/d) / (q/d). Note if q=l. then p/q = p." 
+(if (eql q 1) 
+
+. 
+(let ((d (poly-gcd . q))) 
+(make-rat (poly/poly . d) 
+(poly/poly q d))))) 
+
+Answer 15.10 (1) An integer takes less time and space to process. (2) Representing 
+numbers as a polynomial would cause an infinite regress, because the coefficients 
+would be numbers. (3) Unless a policy was decided upon, the representation would 
+not be canonical, since #(. 3) and #(y 3) both represent 3. 
+
+
+## Chapter 16
+<a id='page-530'></a>
+
+Expert Systems 
+
+An expert is one who knows more and more 
+about less and less. 
+
+-Nicholas Murray Butler (1862-1947) 
+
+I
+I
+n the 1970s there was terrific interest in the area of knowledge-based expert systems. An expert 
+system or knowledge-based system is one that solves problems by applying knowledge 
+that has been garnered from one or more experts in a field. Since these experts will not in 
+general be programmers, they will very probably express their expertise in terms that cannot 
+immediately be translated into a program. It is the goal of expert-system research to come up 
+with a representation that is flexible enough to handle expert knowledge, but still capable of 
+being manipulated by a computer program to come up with solutions. 
+
+
+<a id='page-531'></a>
+
+A plausible candidate for this representation is as logical facts and rules, as in 
+Prolog. However, there are three areas where Prolog provides poor support for a 
+general knowledge-based system: 
+
+* Reasoning with uncertainty. Prolog only deals with the black-and-white world 
+of facts that are clearly true or false (and it doesn't even handle false very well). 
+Often experts will express rules of thumb that are "likely" or "90% certain." 
+* Explanation. Prolog gives solutions to queries but no indication of how those 
+solutions were derived. A system that can explain its solutions to the user in 
+understandable terms will be trusted more. 
+* Flexible flow of control. Prolog works by backward-chaining from the goal. In 
+some cases, we may need more varied control strategy. For example, in medical 
+diagnosis, there is a prescribed order for acquiring certain information about 
+the patient. A medical system must follow this order, even if it doesn't fit in 
+with the backward-chaining strategy. 
+The early expert systems used a wide variety of techniques to attack these problems. 
+Eventually, it became clear that certain techniques were being used frequently, 
+and they were captured in expert-system shells: specialized programming environments 
+that helped acquire knowledge from the expert and use it to solve problems 
+and provide explanations. The idea was that these shells would provide a higher 
+level of abstraction than just Lisp or Prolog and would make it easy to write new 
+expert systems. 
+
+The MYCIN expert system was one of the earliest and remains one of the best 
+known. It was written by Dr. Edward Shortliffe in 1974 as an experiment in medical 
+diagnosis. MYCIN was designed to prescribe antibiotic therapy for bacterial blood 
+infections, and when completed it was judged to perform this task as well as experts 
+in the field. Its name comes from the common suffix in drugs it prescribes: erythromycin, 
+clindamycin, and so on. The following is a slightly modified version of 
+one of MYCIN'S rules, along with an English paraphrase generated by the system: 
+
+(defrule 52 
+
+if (site culture is blood) 
+(gram organism is neg) 
+(morphology organism is rod) 
+(burn patient is serious) 
+
+then .4 
+(identity organism is Pseudomonas)) 
+
+
+<a id='page-532'></a>
+
+Rule 52: 
+If 
+
+1) THE SITE OF THE CULTURE IS BLOOD 
+2) THE GRAM OF THE ORGANISM IS NEG 
+3) THE MORPHOLOGY OF THE ORGANISM IS ROD 
+4) THE BURN OF THE PATIENT IS SERIOUS 
+Then there is weakly suggestive evidence (0.4) that 
+1) THE IDENTITY OF THE ORGANISM IS PSEUDOMONAS 
+MYCIN lead to the development of the EMYCIN expert-system shell. EMYCIN stands 
+for "essential MYCIN," although it is often mispresented as "empty MYCIN." Either 
+way, the name refers to the shell for acquiring knowledge, reasoning with it, and 
+explaining the results, without the specific medical knowledge. 
+
+EMYCIN is a backward-chaining rule interpreter that has much in common with 
+Prolog. However, there are four important differences. First, and most importantly, 
+EMYCIN deals with uncertainty. Instead of insisting that all predications be true or 
+false, EMYCIN associates a certainty factor with each predication. Second, EMYCIN 
+caches the results of its computations so that they need not be duplicated. Third, 
+EMYCIN provides an easy way for the system to ask the user for information. Fourth, 
+it provides explanations of its behavior. This can be summed up in the equation: 
+
+EMYCIN = Prolog -h uncertainty + caching + questions -h explanations 
+
+We will first cover the ways EMYCIN is different from Prolog. After that we will 
+return to the main core of EMYCIN, the backward-chaining rule interpreter. Finally, 
+we will show how to add some medical knowledge to EMYCIN to reconstruct MYCIN. 
+A glossary of the program is in figure 16.1. 
+
+16.1 Dealing with Uncertainty 
+EMYCIN deals with uncertainty by replacing the two boolean values, true and false, 
+with a range of values called certainty factors. These are numbers from -1 (false) to 
++1 (true), with 0 representing a complete unknown. In Lisp: 
+
+(defconstant true +1.0) 
+(defconstant false -1.0) 
+(defconstant unknown 0.0) 
+
+To define the logic of certainty factors, we need to define the logical operations, 
+such as and, or, and not. The first operation to consider is the combination of two 
+distinct pieces of evidence expressed as certainty factors. Suppose we are trying to 
+
+
+<a id='page-533'></a>
+emycin 
+mycin 
+
+defcontext 
+defparm 
+defrule 
+
+true 
+false 
+unknown 
+cf-cut-off 
+
+context 
+parm 
+rule 
+yes/no 
+
+get-context-data 
+find-out 
+get-db 
+use-rules 
+use-rule 
+new-instance 
+report-findings 
+
+cf-or 
+cf-and 
+true-p 
+false-p 
+cf-p 
+put-db 
+clear-db 
+get-vals 
+get-cf 
+update-cf 
+ask-vals 
+prompt-and-read-vals 
+inst-name 
+check-reply 
+parse-reply 
+parm-type 
+get-parm 
+put-rule 
+get-rules 
+clear-rules 
+satisfy-premises 
+eval-condition 
+reject-premise 
+conclude 
+is 
+check-conditions 
+print-rule 
+print-conditions 
+print-condition 
+cf->english 
+print-why 
+
+Top-Level Functions for the Client 
+Run the shell on a list of contexts representing a problem. 
+Run the shell on the microbial infection domain. 
+Top-Level Fimctions for the Expert 
+Define a context. 
+Define a parameter. 
+Define a rule. 
+Constants 
+A certainty factor of +1. 
+A certainty factor of -1. 
+A certainty factor of 0. 
+Below this certainty we cut off search. 
+Data Types 
+A subdomain concerning a particular problem. 
+A parameter. 
+A backward-chaining rule with certainty factors. 
+The type with members yes and no. 
+Major Functions within Emycin 
+Collect data and draw conclusions. 
+Determine values by knowing, asking, or using rules. 
+Retrieve a fact from the data base. 
+
+Apply all rules relevent to a parameter. 
+
+Apply one rule. 
+Create a new instance of a context. 
+Print the results. 
+Auxiliary Functions 
+Combine certainty factors (CPs) with OR. 
+
+Combine certainty factors (CPs) with AND. 
+Is this CP true for purposes of search? 
+Is this CP false for purposes of search? 
+Is this a certainty factor? 
+Place a fact in the data base. 
+Clear all facts from the data base. 
+Get value and CP for a parameter/instance. 
+Get CP for a parameter/instance/value triplet. 
+Change CP for a parameter/instance/value triplet. 
+Ask the user for value/CP for a parameter/instance. 
+Print a prompt and read a reply. 
+The name of an instance. 
+See if reply is valid list of CP/values. 
+Convert reply into list of CP/values. 
+Values of this parameter must be of this type. 
+Find or make a parameter structure for this name. 
+Add a new rule, indexed under each conclusion. 
+Retrieve rules that help determine a parameter. 
+Remove all rules. 
+Calculate the combined CP for the premises. 
+Determine the CP for a condition. 
+Rule out a premise if it is clearly false. 
+Add a parameter/instance/value/CP to the data base. 
+An alias for equal. 
+Make sure a rule is valid. 
+Print a rule. 
+Print a list of conditions. 
+Print a single condition. 
+Convert .7 to "suggestive evidence," etc. 
+Say why a rule is being used. 
+
+Figure 16.1: Glossary for the EMYCIN Program 
+
+
+<a id='page-534'></a>
+
+determine the chances of a patient having disease X. Assume we have a population 
+of prior patients that have been given two lab tests. One test says that 60% of the 
+patients have the disease and the other says that 40% have it. How should we 
+combine these two pieces of evidence into one? Unfortunately, there is no way to 
+answer that question correctly without knowing more about the dependence of the two 
+sources on each other. Suppose the first test says that 60% of the patients (who all 
+happen to be male) have the disease, and the second says that 40% (who all happen 
+to be female) have it. Then we should conclude that 100% have it, because the two 
+tests cover the entire population. On the other hand, if the first test is positive only 
+for patients that are 70 years old or older, and the second is positive only for patients 
+that are 80 or older, then the second is just a subset of the first. This adds no new 
+information, so the correct answer is 60% in this case. 
+
+In section 16.9 we will consider ways to take this kind of reasoning into account. 
+For now, we will present the combination method actually used in EMYCIN. It is 
+defined by the formula: 
+
+combine (A, B) = 
+
+A + B-AB; A,B>0 
+
+A-^B-\-AB; A,B <0 
+
+A-\-B 
+
+; otherwise 
+
+l-min{\Al\B\) 
+
+According to this formula, combine(.60,.40) = .76, which is a compromise between 
+the extremes of .60 and 1.00. It is the same as the probability p(A or B), assuming that 
+A and . are independent. 
+
+However, it should be clear that certainty factors are not the same thing as 
+probabilities. Certainty factors attempt to deal with disbelief as well as belief, but 
+they do not deal with dependence and independence. The EMYCIN combination 
+function has a number of desirable properties: 
+
+* It always computes a number between -1 and +1. 
+* Combining unknown (zero) with anything leaves it unchanged. 
+* Combining true with anything (except false) gives true. 
+* Combining true and false is an error, 
+* Combining two opposites gives unknown. 
+* Combining two positives (except true) gives a larger positive. 
+* Combining a positive and a negative gives something in between. 
+
+<a id='page-535'></a>
+So far we have seen how to combine two separate pieces of evidence for the same 
+hypothesis. In other words, if we have the two rules: 
+
+and we know A with certainty factor (cf) .6 and . with cf .4, then we can conclude C 
+with cf .76. But consider a rule with a conjunction in the premise: 
+
+AandB=>C 
+
+Combining A and . in this case is quite different from combining them when they are 
+in separate rules. EMYCIN chooses to combine conjunctions by taking the minimum of 
+each conjunct's certainty factor. If certainty factors were probabilities, this would be 
+equivalent to assumming dependence between conjuncts in a rule. (If the conjuncts 
+were independent, then the product of the probabilities would be the correct answer.) 
+So EMYCIN is making the quite reasonable (but sometimes incorrect) assumption that 
+conditions that are tied together in a single rule will be dependent on one another, 
+while conditions in separate rules are independent. 
+
+The final complication is that rules themselves may be uncertain. That is, MYCIN 
+accommodates rules that look like: 
+
+AandB=^.9C 
+
+to say that A and . imply C with .9 certainty. EMYCIN simply multiplies the rule's cf 
+by the combined cf of the premise. So if A has cf .6 and . has cf .4, then the premise 
+as a whole has cf .4 (the minimum of A and B), which is multiplied by .9 to get .36. 
+The .36 is then combined with any exisiting cf for C. If C is previously unknown, then 
+combining .36 with 0 will give .36. If C had a prior cf of .76, then the new cf would be 
+.36 -h .76 - (.36 X .76) = .8464. 
+
+Here are the EMYCIN certainty factor combination functions in Lisp: 
+
+(defun cf-or (a b) 
+"Combine the certainty factors for the formula (A or B). 
+This is used when two rules support the same conclusion." 
+(cond ((and (> a 0) (> b 0)) 
+
+(+ a b (* -1 a b))) 
+((and (<a 0) (<b 0)) 
+(+ a b (* a b))) 
+(t (/ (+ a b) 
+(- 1 (min (abs a) (abs b))))))) 
+
+(defun cf-and (a b) 
+"Combine the certainty factors for the formula (A and B). " 
+(min a b)) 
+
+Certainty factors can be seen as a generalization of truth values. EMYCIN is a 
+
+
+<a id='page-536'></a>
+
+backward-chaining rule system that combines certainty factors according to the 
+functions laid out above. But if we only used the certainty factors true and f al se, 
+then EMYCIN would behave exactly like Prolog, returning only answers that are definitely 
+true. It is only when we provide fractional certainty factors that the additional 
+EMYCIN mechanism makes a difference. 
+
+Truth values actually serve two purposes in Prolog. They determine the final 
+answer, yes, but they also determine when to cut off search: if any one of the 
+premises of a rule is false, then there is no sense looking at the other premises. If 
+in EMYCIN we only cut off the search when one of the premises was absolutely false, 
+then we might have to search through a lot of rules, only to yield answers with very 
+low certainty factors. Instead, EMYCIN arbitrarily cuts off the search and considers a 
+premise false when it has a certainty factor below .2. The following functions support 
+this arbitrary cutoff point: 
+
+(defconstant cf-cut-off 0.2 
+"Below this certainty we cut off search.") 
+
+(defun true-p (cf) 
+"Is this certainty factor considered true?" 
+(and (cf-p cf) (> cf cf-cut-off))) 
+
+(defun false-p (cf) 
+"Is this certainty factor considered false?" 
+(and (cf-p cf) (< cf (- cf-cut-off 1.0)))) 
+
+(defun cf-p (x) 
+"Is X a valid numeric certainty factor?" 
+(and (numberp x) (<= false . true))) 
+
+&#9635; Exercise 16.1 [m] Suppose you read the headline "Elvis Alive in Kalamazoo" in a 
+tabloid newspaper to which you attribute a certainty factor of .01. If you combine certainties 
+using EMYCIN'S combination rule, how many more copies of the newspaper 
+would you need to see before you were .95 certain Elvis is alive? 
+
+16.2 Caching Derived Facts 
+The second thing that makes EMYCIN different from Prolog is that EMYCIN caches all 
+the facts it derives in a data base. When Prolog is asked to prove the same goal twice, 
+it performs the same computation twice, no matter how laborious. EMYCIN performs 
+the computation the first time and just fetches it the second time. 
+
+
+<a id='page-537'></a>
+We can implement a simple data base by providing three functions: put - db to add 
+an association between a key and a value, get-db to retrieve a value, and cl ear-db 
+to empty the data base and start over: 
+
+(let ((db (make-hash-table :test #'equal))) 
+(defun get-db (key) (gethash key db)) 
+(defun put-db (key val) (setf (gethash key db) val)) 
+(defun clear-db () (clrhash db))) 
+
+This data base is general enough to hold any association between key and value. 
+However, most of the information we will want to store is more specific. EMYCIN 
+is designed to deal with objects (or instances) and attributes (or parameters) of those 
+objects. For example, each patient has a name parameter. Presumably, the value of 
+this parameter will be known exactly. On the other hand, each microscopic organism 
+has an i denti ty parameter that is normally not known at the start of the consultation. 
+Applying the rules will lead to several possible values for this parameter, each 
+with its own certainty factor. In general, then, the data base will have keys of the 
+form (parameter instance) with values of the form ((vah cf\) (vah c/2)...). In the 
+following code, get - va1 s returns the Ust of value/cf pairs for a given parameter and 
+instance, get-cf returns the certainty factor for a parameter/instance/value triplet, 
+and upda te - cf changes the certainty factor by combining the old one with a new one. 
+Note that the first time update-cf is called on a given parameter/instance/value 
+triplet, get-cf will return un known (zero). Combining that with the given cf yields cf 
+itself. Also note that the data base has to be an equal hash table, because the keys 
+may include freshly consed lists. 
+
+(defun get-vals (parm inst) 
+"Return a list of (val cf) pairs for this (parm inst)." 
+(get-db (list parm inst))) 
+
+(defun get-cf (parm inst val) 
+"Look up the certainty factor or return unknown." 
+(or (second (assoc val (get-vals parm inst))) 
+
+unknown)) 
+
+(defun update-cf (parm inst val cf) 
+"Change the certainty factor for (parm inst is val), 
+by combining the given cf with the old. " 
+(let ((new-cf (cf-or cf (get-cf parm inst val)))) 
+
+(put-db (list parm inst) 
+(cons (list val new-cf) 
+(remove val (get-db (list parm inst)) 
+:key #*first))))) 
+
+The data base holds all information related to an instance of a problem. For example. 
+
+
+<a id='page-538'></a>
+
+in the medical domain, the data base would hold all information about the current 
+patient. When we want to consider a new patient, the data base is cleared. 
+
+There are three other sources of information that cannot be stored in this data 
+base, because they have to be maintained from one problem to the next. First, the 
+rule base holds all the rules defined by the expert. Second, there is a structure to 
+define each parameter; these are indexed under the name of each parameter. Third, 
+we shall see that the flow of control is managed in part by a list ofcontexts to consider. 
+These are structures that will be passed to the myci . function. 
+
+16.3 Asking Questions 
+The third way that EMYCIN differs from Prolog is in providing an automatic means of 
+asking the user questions when answers cannot be derived from the rules. This is not 
+a fundamental difference; after all, it is not too hard to write Prolog rules that print 
+a query and read a reply. EMYCIN lets the knowledge-base designer write a simple 
+declaration instead of a rule, and will even assume a default declaration if none is 
+provided. The system also makes sure that the same question is never asked twice. 
+
+The following function ask-val s prints a query that asks for the parameter of an 
+instance, and reads from the user the value or a list of values with associated certainty 
+factors. The function first looks at the data base to make sure the question has not 
+been asked before. It then checks each value and certainty factor to see if each is of 
+the correct type, and it also allows the user to ask certain questions. A ? reply will 
+show what type answer is expected. Rul e will show the current rule that the system 
+is working on. Why also shows the current rule, but it explains in more detail what the 
+system knows and is trying to find out. Finally, hel . prints the following summary: 
+
+(defconstant help-string 
+
+"~&Type one of the following: 
+
+? - to see possible answers for this parameter 
+
+rule - to show the current rule 
+
+why - to see why this question is asked 
+
+help - to see this list 
+
+xxx - (for some specific xxx) if there is a definite answer 
+
+(XXX .5 yyy .4) - If there are several answers with 
+different certainty factors.") 
+Here is a s k - va 1 s. Note that the why and rule options assume that the current rule has 
+been stored in the data base. The functions pri nt-why, parm-type, and check- repl y 
+will be defined shortly. 
+
+
+<a id='page-539'></a>
+(defun ask-vals (parm inst) 
+"Ask the user for the value(s) of inst's parm parameter, 
+unless this has already been asked. Keep asking until the 
+user types UNKNOWN (return nil) or a valid reply (return t)." 
+(unless (get-db '(asked ,parm .inst)) 
+
+(put-db '(asked .parm .inst) t) 
+(loop 
+(let ((ans (prompt-and-read-vals parm inst))) 
+
+(case ans 
+(help (format t help-string)) 
+(why (print-why (get-db 'current-rule) parm)) 
+(rule (princ (get-db 'current-rule))) 
+((unk unknown) (RETURN nil)) 
+(? (format t "~&A ~a must be of type ~a" 
+
+parm (parm-type parm)) nil) 
+
+(t (if (check-reply ans parm inst) 
+(RETURN t) 
+(format t "~&I1legal reply. ~ 
+
+Type ? to see legal ones.")))))))) 
+
+The following is prompt - and - read- va 1 s, the function that actually asks the query and 
+
+reads the reply. It basically calls format to print a prompt and read to get the reply, but 
+
+there are a few subtleties. First, it calls finish- output. Some Lisp implementations 
+
+buffer output on a line-by-line basis. Since the prompt may not end in a newline, 
+
+f i ni sh - output makes sure the output is printed before the reply is read. 
+
+So far, all the code that refers to a parm is really referring to the name of a 
+parameter - a symbol. The actual parameters themselves will be implemented as 
+structures. We use get-parm to look up the structure associated with a symbol, and 
+the selector functions parm-prompt to pick out the prompt for each parameter and 
+pa rm- reader to pick out the reader function. Normally this will be the function read, 
+but read -1 i ne is appropriate for reading string-valued parameters. 
+
+The macro def parm (shown here) provides a way to define prompts and readers 
+for parameters. 
+
+(defun prompt-and-read-vals (parm inst) 
+"Print the prompt for this parameter (or make one up) and 
+read the reply." 
+(fresh-line) 
+(format t (parm-prompt (get-parm parm)) (inst-name inst) parm) 
+(princ " ") 
+(finish-output) 
+(funcall (parm-reader (get-parm parm)))) 
+
+
+<a id='page-540'></a>
+
+(defun inst-name (inst) 
+"The name of this instance." 
+The stored name is either like (("Jan Doe" 1.0)) or nil 
+(or (first (first (get-vals 'name inst))) 
+inst)) 
+
+The function check- repl y uses parse - repl y to convert the user's reply into a canonical 
+form, and then checks that each value is of the right type, and that each certainty 
+factor is valid. If so, the data base is updated to reflect the new certainty factors. 
+
+(defun check-reply (reply parm inst) 
+"If reply is valid for this parm, update the DB. 
+Reply should be a val or (vail cfl val2 cf2 ...) . 
+Each val must be of the right type for this parm." 
+(let ((answers (parse-reply reply))) 
+
+(when (every #'(lambda (pair) 
+(and (typep (first pair) (parm-type parm)) 
+(cf-p (second pair)))) 
+answers) 
+Add replies to the data base 
+(dolist (pair answers) 
+(update-cf parm inst (first pair) (second pair))) 
+answers))) 
+
+(defun parse-reply (reply) 
+"Convert the reply into a list of (value cf) pairs." 
+(cond ((null reply) nil) 
+
+((atom reply) *((,reply .true))) 
+(t (cons (list (first reply) (second reply)) 
+(parse-reply (rest2 reply)))))) 
+
+Parameters are implemented as structures with six slots: the name (a symbol), the 
+context the parameter is for, the prompt used to ask for the parameter's value, 
+a Boolean that tells if we should ask the user before or after using rules, a type 
+restriction describing the legal values, and finally, the function used to read the 
+value of the parameter. 
+
+Parameters are stored on the property list of their names under the pa rm property, 
+so getting the pa rm- type of a name requires first getting the parm structure, and then 
+selecting the type restriction field. By default, a parameter is given type t, meaning 
+that any value is valid for that type. We also define the type yes/no, which comes in 
+handy for Boolean parameters. 
+
+We want the default prompt to be "What is the PARM of the INST?" But most 
+user-defined prompts will want to print the inst, and not the parm. To make it easy 
+to write user-defined prompts, prompt-and-read-vals makes the instance be the 
+first argument to the format string, with the parm second. Therefore, in the default 
+
+
+<a id='page-541'></a>
+prompt we need to use the format directive " ~*" to skip the instance argument, and 
+"'^2:*" to back up two arguments to get back to the instance. (These directives are 
+common in cerror calls, where one list of arguments is passed to two format strings.) 
+
+defparm is a macro that calls new-parm, the constructor function defined in the 
+parm structure, and stores the resulting structure under the parm property of the 
+parameter's name. 
+
+(defstruct (parm (.-constructor 
+new-parm (name &optional context type-restrict!on 
+
+prompt ask-first reader))) 
+name (context nil) (prompt "~&What is the ~*~a of ~2:*~a?") 
+(ask-first nil) (type-restriction t) (reader 'read)) 
+
+(defmacro defparm (parm &rest args) 
+"Define a parameter." 
+'(setf (get *,parm *parm) (apply #*new-parm *,parm *.args))) 
+
+(defun parm-type (parm-name) 
+"What type is expected for a value of this parameter?" 
+(parm-type-restriction (get-parm parm-name))) 
+
+(defun get-parm (parm-name) 
+"Look up the parameter structure with this name." 
+If there is none, make one 
+(or (get parm-name 'parm) 
+(setf (get parm-name 'parm) (new-parm parm-name)))) 
+
+(deftype yes/no () '(member yes no)) 
+
+16.4 Contexts Instead of Variables 
+Earlier we gave an equation relating EMYCIN to Prolog. That equation was not quite 
+correct, because EMYCIN lacks one of Prolog's most important features: the logic 
+variable. Instead, EMYCIN uses contexts. So the complete equation is: 
+
+EMYCIN = Prolog + uncertainty -f caching -f questions + explanations 
+-f contexts - variables 
+
+A context is defined by the designers of MYCIN as a situation within which the 
+program reasons. But it makes more sense to think of a context simply as a data 
+type. So the list of contexts supplied to the program will determine what types of 
+objects can be reasoned about. The program keeps track of the most recent instance 
+of each type, and the rules can refer to those instances only, using the name of the 
+
+
+<a id='page-542'></a>
+
+type. In our version of MYCIN, there are three types or contexts: patients, cultures, 
+and organisms. Here is an example of a rule that references all three contexts: 
+
+(defrule 52 
+
+if (site culture is blood) 
+(gram organism is neg) 
+(morphology organism is rod) 
+(burn patient is serious) 
+
+then .4 
+(identity organism is Pseudomonas)) 
+
+Ignoring certainty factors for the moment, this MYCIN rule is equivalent to a Prolog 
+rule of the form: 
+
+(<- (identity ?o ?pseudomonas) 
+
+(and (culture ?c) (site ?c blood) 
+(organism ?o) (gram ?o neg) (morphology ?o rod) 
+(patient ?p) (burn ?p serious))) 
+
+The context mechanism provides sufficient flexibility to handle many of the cases 
+that would otherwise be handled by variables. One important thing that cannot 
+be done is to refer to more than one instance of the same context. Only the most 
+recent instance can be referred to. Contexts are implemented as structures with the 
+following definition: 
+
+(defstruct context 
+"A context is a sub-domain, a type." 
+name (number 0) initial-data goals) 
+
+(defmacro defcontext (name &optional initial-data goals) 
+"Define a context." 
+
+'(make-context :name '.name :initial-data *.initial-data 
+igoals '.goals)) 
+The name field is something like patient or organism. Instances of contexts are 
+numbered; the number field holds the number of the most recent instance. Each 
+context also has two lists of parameters. The i ni ti al -data parameters are asked for 
+when each instance is created. Initial data parameters are normally known by the 
+user. For example, a doctor will normally know the patient's name, age, and sex, and 
+as a matter of training expects to be asked these questions first, even if they don't 
+factor into every case. The goal parameters, on the other hand, are usually unknown 
+to the user. They are determined through the backward-chaining process. 
+
+The following function creates a new instance of a context, writes a message, and 
+stores the instance in two places in the data base: under the key current -i nstance. 
+
+
+<a id='page-543'></a>
+and also under the name of the context. The contexts form a tree. In our example, 
+the pa ti ent context is the root of the tree, and the current patient is stored in the data 
+base under the key pati ent. The next level of the tree is for cultures taken from the 
+patient; the current culture is stored under the cul ture key. Finally, there is a level 
+for organisms found in each culture. The current organism is stored under both the 
+organi sm and current -i nstance keys. The context tree is shown in figure 16.2. 
+
+(defun new-instance (context) 
+"Create a new instance of this context." 
+(let ((instance (format nil "~a-~d" 
+
+(context-name context) 
+(incf (context-number context))))) 
+
+(format t "~& ~a ~&" instance) 
+(put-db (context-name context) instance) 
+(put-db 'current-instance instance))) 
+
+Patient: Sylvia Fischer 
+
+CULTURE-1 CULTURE-2 
+
+ORGANISM-1 ORGANISM-2 
+
+Figure 16.2: A Context Tree 
+
+16.5 Backward-Chaining Revisited 
+Now that we have seen how EMYCIN is different from Prolog, we are ready to tackle 
+the way in which it is the same: the backward-chaining rule interpreter. Like Prolog, 
+EMYCIN is given a goal and applies rules that are appropriate to the goal. Applying a 
+rule means treating each premise of the rule as a goal and recursively applying rules 
+that are appropriate to each premise. 
+
+
+<a id='page-544'></a>
+
+There are still some remaining differences. In Prolog, a goal can be any expression, 
+and appropriate rules are those whose heads unify with the goal. If any appropriate 
+rule succeeds, then the goal is known to be true. In EMYCIN, a rule might give a goal 
+a certainty of .99, but we still have to consider all the other rules that are appropriate 
+to the goal, because they might bring the certainty down below the cutoff threshold. 
+Thus, EMYCIN always gathers all evidence relating to a parameter/instance pair first, 
+and only evaluates the goal after all the evidence is in. For example, if the goal was 
+(temp pa ti ent > 98.6), EMYCIN would first evaluate all rules with conclusions about 
+the current patient's temperature, and only then compare the temperature to 98.6. 
+
+Another way of looking at it is that Prolog has the luxury of searching depth-first, 
+because the semantics of Prolog rules is such that if any rule says a goal is true, then it 
+is true. EMYCIN must search breadth-first, because a goal with certainty of .99 might 
+turn out to be false when more evidence is considered. 
+
+We are now ready to sketch out the design of the EMYCIN rule interpreter: To 
+fi nd-out a parameter of an instance: If the value is already stored in the data base, 
+use the known value. Otherwise, the two choices are using the rules or asking the 
+user. Do these in the order specified for this parameter, and if the first one succeeds, 
+don't bother with the second. Note that ask-val s (defined above) will not ask the 
+same question twice. 
+
+To use - rul es, find all the rules that concern the given parameter and evaluate 
+them with use - rul e. After each rule has been tried, if any of them evaluate to true, 
+then succeed. 
+
+To use - rul e a rule, first check if any of the premises can be rejected outright. If 
+we did not have this check, then the system could start asking the user questions that 
+were obviously irrelevant. So we waste some of the program's time (checking each 
+premise twice) to save the more valuable user time. (The function eval -condi ti on 
+takes an optional argument specifying if we should recursively ask questions in trying 
+to accept or reject a condition.) 
+
+If no premise can be rejected, then evaluate each premise in turn with 
+eval uate- condi ti on, keeping track of the accumulated certainty factor with cf - and 
+(which is currently just mi n), and cutting off evaluation when the certainty factor 
+drops below threshold. If the premises evaluate true, then add the conclusions to 
+the data base. The calling sequence looks like this. Note that the recursive call to 
+f i nd - out is what enables chaining to occur: 
+
+f i nd - out ; To find out a parameter for an instance: 
+
+get- db ; See if it is cached in the data base 
+a s k-V a 1 s ; See if the user knows the answer 
+use - rul es ; See if there is a rule for it: 
+reject-premise ; See if the rule is outright false 
+satisfy-premises ; Or see if each condition is true: 
+eval-condition ; Evaluate each condition 
+f i nd - out ; By finding the parameter's values 
+
+
+<a id='page-545'></a>
+Before showing the interpreter, here is the structure definition for rules, along with 
+the functions to maintain a data base of rules: 
+
+(defstruct (rule (:print-function print-rule)) 
+number premises conclusions cf) 
+
+(let ((rules (make-hash-table))) 
+
+(defun put-rule (rule) 
+"Put the rule in a table, indexed under each 
+parm in the conclusion." 
+(dolist (concl (rule-conclusions rule)) 
+
+(push rule (gethash (first concl) rules))) 
+rule) 
+
+(defun get-rules (parm) 
+"A list of rules that help determine this parameter." 
+(gethash parm rules)) 
+
+(defun clear-rules () (clrhash rules))) 
+
+Here, then, is the interpreter, f i nd-out. It can find out the value(s) of a parameter 
+three ways. First, it looks to see if the value is already stored in the data base. Next, 
+it tries asking the user or using the rules. The order in which these two options are 
+tried depends on the parm-ask-first property of the parameter. Either way, if an 
+answer is determined, it is stored in the data base. 
+
+(defun find-out (parm &optional (inst (get-db 'current-instance))) 
+"Find the value(s) of this parameter for this instance, 
+unless the values are already known. 
+Some parameters we ask first; others we use rules first." 
+(or (get-db '(known .parm .inst)) 
+
+(put-db '(known .parm .inst) 
+
+(if (parm-ask-first (get-parm parm)) 
+(or (ask-vals parm inst) (use-rules parm)) 
+(or (use-rules parm) (ask-vals parm inst)))))) 
+
+(defun use-rules (parm) 
+"Try every rule associated with this parameter. 
+Return true if one of the rules returns true." 
+(some #'true-p (mapcar #'use-rule (get-rules parm)))) 
+
+
+<a id='page-546'></a>
+
+(defun use-rule (rule) 
+"Apply a rule to the current situation." 
+;; Keep track of the rule for the explanation system: 
+(put-db 'current-rule rule) 
+;; If any premise is known false, give up. 
+;; If every premise can be proved true, then 
+
+draw conclusions (weighted with the certainty factor), 
+(unless (some #'reject-premise (rule-premises rule)) 
+(let ((cf (satisfy-premises (rule-premises rule) true))) 
+(when (true-p cf) 
+(dolist (conclusion (rule-conclusions rule)) 
+(conclude conclusion (* cf (rule-cf rule)))) 
+cf)))) 
+
