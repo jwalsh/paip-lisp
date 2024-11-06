@@ -1,0 +1,265 @@
+#+TITLE: Othello Implementation from PAIP Chapter 18 
+#+AUTHOR: Jason Walsh
+#+EMAIL: j@wal.sh
+#+DATE: 2024
+#+PROPERTY: header-args :mkdirp t
+#+PROPERTY: header-args:emacs-lisp+ :comments both
+#+PROPERTY: header-args:emacs-lisp+ :prologue ";; Copyright (C) 2024 ${author}\n;; Author: ${author} <${email}>\n\n"
+
+* Overview
+An implementation of the game Othello (Reversi) based on Chapter 18 of PAIP.
+This version has been updated to use modern Emacs Lisp conventions and package structure.
+
+* Core Package
+#+begin_src emacs-lisp :mkdirp t :tangle ../othello-el/othello.el
+;;; othello.el --- Othello game implementation from PAIP -*- lexical-binding: t -*-
+
+;; Package-Requires: ((emacs "28.1"))
+;; Keywords: games
+;; Version: 1.0.0
+;; URL: https://github.com/jwalsh/othello-el
+
+;; This program is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;;; Commentary:
+;; Implementation of Othello (Reversi) based on PAIP Chapter 18.
+;; Features alpha-beta search and the lago evaluation strategy.
+
+;;; Code:
+
+(require 'cl-lib)
+
+(defgroup othello nil
+  "Othello game implementation from PAIP."
+  :group 'games
+  :prefix "othello-")
+
+(defconst othello-all-directions '(-11 -10 -9 -1 1 9 10 11)
+  "The eight directions pieces can move on the board.")
+
+(defconst othello-empty 0 "An empty square")
+(defconst othello-black 1 "A black piece")
+(defconst othello-white 2 "A white piece")
+(defconst othello-outer 3 "Marks squares outside the 8x8 board")
+
+(defconst othello-winning-value most-positive-fixnum)
+(defconst othello-losing-value most-negative-fixnum)
+
+(cl-deftype othello-piece () '(integer 0 3))
+(cl-deftype othello-board () '(vector othello-piece 100))
+
+(defun othello-bref (board square)
+  "Get the value at SQUARE on BOARD."
+  (aref board square))
+
+(gv-define-setter othello-bref (val board square)
+  `(aset ,board ,square ,val))
+
+(defun othello-name-of (piece)
+  "Get the display character for PIECE."
+  (aref ["." "@" "O" "?"] piece))
+
+(defun othello-opponent (player)
+  "Get the opponent of PLAYER."
+  (if (eq player othello-black) othello-white othello-black))
+
+(defun othello-copy-board (board)
+  "Make a new copy of BOARD."
+  (copy-sequence board))
+
+(provide 'othello)
+;;; othello.el ends here
+#+end_src
+
+* Edge Analysis
+#+begin_src emacs-lisp :mkdirp t :tangle ../othello-el/othello-edges.el
+;;; othello-edges.el --- Edge stability analysis for Othello -*- lexical-binding: t -*-
+
+;;; Commentary:
+;; Edge stability analysis functions for Othello.
+
+;;; Code:
+
+(require 'othello)
+
+(defvar othello-edge-table 
+  (make-vector (expt 3 10) 0)
+  "Table of edge position evaluations.")
+
+(defconst othello-edge-and-x-lists
+  '((22 11 12 13 14 15 16 17 18 27)  ; Top edge
+    (72 81 82 83 84 85 86 87 88 77)  ; Bottom edge
+    (22 11 21 31 41 51 61 71 81 72)  ; Left edge
+    (27 18 28 38 48 58 68 78 88 77)) ; Right edge
+  "The four edges with their X-squares.")
+
+(defun othello-edge-index (player board squares)
+  "The index counts 1 for PLAYER; 2 for opponent on each square in SQUARES."
+  (let ((index 0))
+    (dolist (sq squares)
+      (setq index (+ (* index 3)
+                    (cond ((eql (othello-bref board sq) othello-empty) 0)
+                          ((eql (othello-bref board sq) player) 1)
+                          (t 2)))))
+    index))
+
+(defun othello-edge-stability (player board)
+  "Total edge evaluation for PLAYER to move on BOARD."
+  (cl-loop for edge-list in othello-edge-and-x-lists
+           sum (aref othello-edge-table
+                    (othello-edge-index player board edge-list))))
+
+(provide 'othello-edges)
+;;; othello-edges.el ends here
+#+end_src
+
+* lago Evaluation
+#+begin_src emacs-lisp :mkdirp t :tangle ../othello-el/othello-lago.el
+;;; othello-lago.el --- lago evaluation strategy -*- lexical-binding: t -*-
+
+;;; Commentary:
+;; Implementation of Rosenbloom's lago evaluation strategy.
+
+;;; Code:
+
+(require 'othello)
+(require 'othello-edges)
+
+(defvar othello-move-number 1
+  "Current move number in the game.")
+
+(defun othello-lago-eval (player board)
+  "Evaluate position for PLAYER using lago's strategy."
+  (let ((c-edg (+ 312000 (* 6240 othello-move-number)))
+        (c-cur (if (< othello-move-number 25)
+                   (+ 50000 (* 2000 othello-move-number))
+                 (+ 75000 (* 1000 othello-move-number))))
+        (c-pot 20000))
+    (cl-multiple-value-bind (p-cur p-pot)
+        (othello-mobility player board)
+      (cl-multiple-value-bind (o-cur o-pot)
+          (othello-mobility (othello-opponent player) board)
+        (+ (round (* c-edg (othello-edge-stability player board)) 32000)
+           (round (* c-cur (- p-cur o-cur)) (+ p-cur o-cur 2))
+           (round (* c-pot (- p-pot o-pot)) (+ p-pot o-pot 2)))))))
+
+(provide 'othello-lago)
+;;; othello-lago.el ends here
+#+end_src
+
+* Search Strategies
+#+begin_src emacs-lisp :mkdirp t :tangle ../othello-el/othello-search.el
+;;; othello-search.el --- Search strategies for Othello -*- lexical-binding: t -*-
+
+;;; Commentary:
+;; Alpha-beta search implementation with killer moves.
+
+;;; Code:
+
+(require 'othello)
+
+(cl-defstruct (othello-node (:constructor othello-make-node))
+  "Node in the game tree search."
+  square board value)
+
+(defvar othello-ply-boards
+  (apply #'vector 
+         (cl-loop repeat 40 collect (othello-initial-board)))
+  "Vector of boards used during search to avoid consing.")
+
+(defun othello-alpha-beta3 (player board achievable cutoff ply eval-fn killer)
+  "Alpha-beta search with killer moves."
+  (if (= ply 0)
+      (funcall eval-fn player board)
+    (let ((moves (othello-put-first killer (othello-legal-moves player board))))
+      (if (null moves)
+          (if (othello-any-legal-move? (othello-opponent player) board)
+              (- (othello-alpha-beta3 (othello-opponent player) board
+                                    (- cutoff) (- achievable)
+                                    (- ply 1) eval-fn nil))
+            (othello-final-value player board))
+        (let ((best-move (car moves))
+              (new-board (aref othello-ply-boards ply))
+              (killer2 nil)
+              (killer2-val othello-winning-value))
+          (cl-loop for move in moves
+                   do (cl-multiple-value-bind (val reply)
+                          (othello-alpha-beta3
+                           (othello-opponent player)
+                           (othello-make-move move player
+                                            (replace new-board board))
+                           (- cutoff) (- achievable)
+                           (- ply 1) eval-fn killer2)
+                        (setq val (- val))
+                        (when (> val achievable)
+                          (setf achievable val
+                                best-move move))
+                        (when (and reply (< val killer2-val))
+                          (setf killer2 reply
+                                killer2-val val)))
+                   until (>= achievable cutoff))
+          (values achievable best-move))))))
+
+(defun othello-alpha-beta-searcher3 (depth eval-fn)
+  "Create a strategy using alpha-beta search with killer moves."
+  (lambda (player board)
+    (cl-multiple-value-bind (value move)
+        (othello-alpha-beta3 player board 
+                            othello-losing-value 
+                            othello-winning-value
+                            depth eval-fn nil)
+      (declare (ignore value))
+      move)))
+
+(provide 'othello-search)
+;;; othello-search.el ends here
+#+end_src
+
+* Tests
+#+begin_src emacs-lisp :mkdirp t :tangle ../othello-el/test/othello-test.el
+;;; othello-test.el --- Tests for Othello implementation -*- lexical-binding: t -*-
+
+;;; Commentary:
+;; Test suite for the Othello implementation.
+
+;;; Code:
+
+(require 'ert)
+(require 'othello)
+(require 'othello-edges)
+(require 'othello-lago)
+(require 'othello-search)
+
+(ert-deftest othello-test-initial-board ()
+  "Test initial board setup."
+  (let ((board (othello-initial-board)))
+    (should (eq (othello-bref board 44) othello-white))
+    (should (eq (othello-bref board 45) othello-black))
+    (should (eq (othello-bref board 54) othello-black))
+    (should (eq (othello-bref board 55) othello-white))))
+
+(ert-deftest othello-test-edge-stability ()
+  "Test edge stability calculations."
+  (let ((board (othello-initial-board)))
+    (should (= (othello-edge-stability othello-black board)
+               (othello-edge-stability othello-white board)))))
+
+(provide 'othello-test)
+;;; othello-test.el ends here
+#+end_src
+
+* Package Metadata for othello-el
+#+begin_src emacs-lisp :mkdirp t :tangle ../othello-el/othello-pkg.el
+(define-package "othello" "1.0.0"
+  "Othello game implementation from PAIP"
+  '((emacs "28.1")))
+#+end_src
+
+* Local Variables                                                  :ARCHIVE:noexport:
+# Local Variables:
+# org-confirm-babel-evaluate: nil
+# End:
+
